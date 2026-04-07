@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MazeDash Support</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b14;
+      --panel: #0b1220;
+      --text: #f3f7ff;
+      --muted: #9fb0c8;
+      --cyan: #00d4ff;
+      --pink: #ff2d9a;
+      --line: rgba(0, 212, 255, 0.16);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(0, 212, 255, 0.12), transparent 36%),
+        radial-gradient(circle at 85% 12%, rgba(255, 45, 154, 0.08), transparent 24%),
+        linear-gradient(180deg, #070b14 0%, #090f1c 48%, #05070d 100%);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 28px 24px;
+      background: rgba(11, 18, 32, 0.86);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(10px);
+    }
+    h1, h2 { margin: 0 0 12px; line-height: 1.2; }
+    h1 { font-size: clamp(30px, 5vw, 42px); letter-spacing: 0.04em; }
+    h2 { margin-top: 28px; font-size: 20px; color: var(--cyan); }
+    p, li { color: var(--muted); font-size: 16px; }
+    .tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.18);
+      color: var(--cyan);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    a { color: var(--pink); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="tag">MazeDash</div>
+    <h1>Support</h1>
+    <p>If you need help with MazeDash, contact <a href="mailto:ansarbi2019@gmail.com">ansarbi2019@gmail.com</a>.</p>
+
+    <h2>Common Topics</h2>
+    <p>You can contact support for:</p>
+    <ul>
+      <li>gameplay issues</li>
+      <li>progress or save problems</li>
+      <li>daily challenge questions</li>
+      <li>cosmetic unlock or shop issues</li>
+      <li>technical issues on iPhone</li>
+    </ul>
+
+    <h2>Response</h2>
+    <p>Please include your device model and iOS version when reporting a bug.</p>
+  </main>
+</body>
+</html>

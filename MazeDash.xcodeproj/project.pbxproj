@@ -108,15 +108,15 @@
 			path = Base.lproj;
 			sourceTree = "<group>";
 		};
-		7BC2B5A5996C635F87B8DBA2 /* MazeDash iOS */ = {
+		7BC2B5A5996C635F87B8DBA2 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
 				79826E4C46EF2636074F3C3C /* Base.lproj */,
 				C1CB0D5F3934D7A406EA76DF /* AppDelegate.swift */,
 				801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */,
 			);
-			name = "MazeDash iOS";
-			path = "MazeDash iOS";
+			name = iOS;
+			path = "MazeDash/iOS";
 			sourceTree = "<group>";
 		};
 		88B0E8DEDF12A8205594AD32 = {
@@ -124,12 +124,12 @@
 			children = (
 				EEC4F4FBA1D709A8495DBA97 /* Products */,
 				B5469497AC427D2F92F723FE /* Frameworks */,
-				96146AFD0402FE81E7776FD2 /* MazeDash Shared */,
-				7BC2B5A5996C635F87B8DBA2 /* MazeDash iOS */,
+				96146AFD0402FE81E7776FD2 /* Shared */,
+				7BC2B5A5996C635F87B8DBA2 /* iOS */,
 			);
 			sourceTree = "<group>";
 		};
-		96146AFD0402FE81E7776FD2 /* MazeDash Shared */ = {
+		96146AFD0402FE81E7776FD2 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
 				C5966B9DEA9EEFB088CB5D96 /* Actions.sks */,
@@ -161,8 +161,8 @@
 				A9A986602978C97474CDA546 /* Assets.xcassets */,
 				53BAAC804F66C5300B609457 /* Audio */,
 			);
-			name = "MazeDash Shared";
-			path = "MazeDash Shared";
+			name = Shared;
+			path = "MazeDash/Shared";
 			sourceTree = "<group>";
 		};
 		B5469497AC427D2F92F723FE /* Frameworks */ = {
@@ -348,7 +348,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = "MazeDash iOS/MazeDash.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "MazeDash/iOS/MazeDash.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = UBMDRS7H3R;
@@ -445,7 +445,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = "MazeDash iOS/MazeDash.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "MazeDash/iOS/MazeDash.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = UBMDRS7H3R;

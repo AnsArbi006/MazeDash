@@ -1,0 +1,17 @@
+MazeDash does not require a user account or sign-in.
+
+Core control:
+- Swipe in any direction to move through the maze.
+
+Important review notes:
+- Story Mode includes one-time mechanic tutorials for new gimmicks.
+- Daily Challenge may show a daily prompt on launch.
+- The in-game Shop uses gameplay-earned coins only.
+- There are no in-app purchases, no real-money purchases, no ads, and no login system.
+
+Modes:
+- Story Mode: structured level progression
+- Time Challenge: endless timed challenge
+- Daily Challenge: fixed daily maze with bot benchmark rewards
+
+The app can be fully reviewed without any credentials.

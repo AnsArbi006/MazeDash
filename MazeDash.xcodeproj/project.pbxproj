@@ -3,118 +3,180 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 46;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		05D8E8A4F96195BB494F1DC4 /* SoundFX.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF53022BD43CE66F2C0C68BF /* SoundFX.swift */; };
+		1914B34FA567D00F02897AB1 /* ComboSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 766292B4D1B71AD717942F0E /* ComboSystem.swift */; };
+		1A03D7FA577302CD37AA2A59 /* Audio in Resources */ = {isa = PBXBuildFile; fileRef = 53BAAC804F66C5300B609457 /* Audio */; };
+		1BA6BFB0E5CC804F0A65D06D /* ResultOverlayNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911860B8939D8FC96A0725D2 /* ResultOverlayNode.swift */; };
+		1DE3FFAC0BE8DD01089EFA0E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CB0D5F3934D7A406EA76DF /* AppDelegate.swift */; };
+		286F5DEDFF6EDF710167F5B9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FFDD1BE705930183E7A3A5AB /* Foundation.framework */; };
+		3376D63E63E59FEF5E4F048E /* GlossyUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E713F09C76BBFDF81A542E /* GlossyUI.swift */; };
+		4C5C0C8405A2613B45406951 /* GameViewController 09.03.23.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */; };
+		5D274415E40F1AB3A179987D /* OverlayNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BDC4E39E0296B02558C551 /* OverlayNodes.swift */; };
+		5E5A73C3215EC6E44F6BCD4D /* UIStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2BCFD82A462D4B5E5B57B1 /* UIStyle.swift */; };
+		61D9B902A5A4791D73D3A433 /* MazeSolvability.swift in Sources */ = {isa = PBXBuildFile; fileRef = D23146C4E79C7D796D988E2D /* MazeSolvability.swift */; };
+		6C10A1A98C4F7FEE8D61FB95 /* ScrollContainerNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE687F43F79820CE9DD0A31 /* ScrollContainerNode.swift */; };
+		6C2786512B1FA002680E2188 /* MazeThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 719B24F37012503C91E4D910 /* MazeThemes.swift */; };
+		769B9844331E8DBF30943DEC /* GameScene.sks in Resources */ = {isa = PBXBuildFile; fileRef = 9A786993E5BE99321226274F /* GameScene.sks */; };
+		854B837989BA0B63CB4FD99C /* FlowSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990E43B327CEA18B4EE8894C /* FlowSystem.swift */; };
+		8B7F86C079D623C77D843AC0 /* NeonUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399057B736C71E2CFED5A532 /* NeonUI.swift */; };
+		9D6A0C4F84F88FFD25ED6EC5 /* LaunchScreen 09.00.14.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 206F3843B350DAED92F05AB9 /* LaunchScreen 09.00.14.storyboard */; };
+		A1992C53EF327FF9D3E8B4ED /* LevelSelectScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5B9E1DB5076B1F8431F42E /* LevelSelectScene.swift */; };
+		A41ACEF01EDBDE0E18ACE583 /* TopBarNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15917DCB8066AC307DC88CD8 /* TopBarNode.swift */; };
+		AA09B38CC972F4C87B40FC4A /* BundledNormalLevels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006B3CBF39E1F18040DA7FC7 /* BundledNormalLevels.swift */; };
+		B47B939BF23EA1C6E2D2E1A2 /* GameScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E19391E356A8E6A09094BA7 /* GameScene.swift */; };
+		BB0E618E5A5E54E25C6200C7 /* TextureFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A56075EBC94697B609E9942 /* TextureFactory.swift */; };
+		BD82BD7A4E368A9F10C0ACE3 /* MazeCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B34F82C67994173B12FABB /* MazeCache.swift */; };
+		BE7D32A9E629AA85071C1016 /* LevelConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D2C34AA7A2DED72674EDEB /* LevelConfig.swift */; };
+		BF13797EF630F1AE79B23A3C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2C7F09E8DFDDD37FF730ABB3 /* Main.storyboard */; };
+		BF9D76C46897477B42E41190 /* MiniMapNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1AC47FEDF538443C58E490 /* MiniMapNode.swift */; };
+		D3F464B6290B4341814E3BFC /* ButtonNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00441092E96D61C7FD01D7C /* ButtonNode.swift */; };
+		DF63A88AD7FAE7126FA3E67B /* NeonData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A07E5031B31D876B7567D8E2 /* NeonData.swift */; };
+		E3CD80CCDA9B0191BE6D9088 /* LevelCardNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DABAAABC1E03C417BD688F /* LevelCardNode.swift */; };
+		EE61F9C6CE51B19CF172365D /* StartScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CB1062502970392DD0193C4 /* StartScene.swift */; };
+		F993FC126A64DDC291FDA458 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9A986602978C97474CDA546 /* Assets.xcassets */; };
+		FDD64A839D19145F0D221587 /* MazeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E76C13419B8AEE9E637EB84 /* MazeGenerator.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		E90EA1232F15E32700471309 /* MazeDash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MazeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E90EA1342F15E32700471309 /* MazeDash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MazeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E90EA1442F15E32700471309 /* MazeDash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MazeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		006B3CBF39E1F18040DA7FC7 /* BundledNormalLevels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BundledNormalLevels.swift; sourceTree = "<group>"; };
+		15917DCB8066AC307DC88CD8 /* TopBarNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TopBarNode.swift; sourceTree = "<group>"; };
+		206F3843B350DAED92F05AB9 /* LaunchScreen 09.00.14.storyboard */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; path = "LaunchScreen 09.00.14.storyboard"; sourceTree = "<group>"; };
+		24B34F82C67994173B12FABB /* MazeCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MazeCache.swift; sourceTree = "<group>"; };
+		2C7F09E8DFDDD37FF730ABB3 /* Main.storyboard */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; path = Main.storyboard; sourceTree = "<group>"; };
+		2E19391E356A8E6A09094BA7 /* GameScene.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameScene.swift; sourceTree = "<group>"; };
+		2E5B9E1DB5076B1F8431F42E /* LevelSelectScene.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LevelSelectScene.swift; sourceTree = "<group>"; };
+		399057B736C71E2CFED5A532 /* NeonUI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NeonUI.swift; sourceTree = "<group>"; };
+		4A56075EBC94697B609E9942 /* TextureFactory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextureFactory.swift; sourceTree = "<group>"; };
+		51E713F09C76BBFDF81A542E /* GlossyUI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlossyUI.swift; sourceTree = "<group>"; };
+		53BAAC804F66C5300B609457 /* Audio */ = {isa = PBXFileReference; includeInIndex = 1; path = Audio; sourceTree = "<group>"; };
+		5E76C13419B8AEE9E637EB84 /* MazeGenerator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MazeGenerator.swift; sourceTree = "<group>"; };
+		719B24F37012503C91E4D910 /* MazeThemes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MazeThemes.swift; sourceTree = "<group>"; };
+		766292B4D1B71AD717942F0E /* ComboSystem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComboSystem.swift; sourceTree = "<group>"; };
+		7F1AC47FEDF538443C58E490 /* MiniMapNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MiniMapNode.swift; sourceTree = "<group>"; };
+		801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "GameViewController 09.03.23.swift"; sourceTree = "<group>"; };
+		911860B8939D8FC96A0725D2 /* ResultOverlayNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ResultOverlayNode.swift; sourceTree = "<group>"; };
+		990E43B327CEA18B4EE8894C /* FlowSystem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FlowSystem.swift; sourceTree = "<group>"; };
+		9A786993E5BE99321226274F /* GameScene.sks */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.sks; path = GameScene.sks; sourceTree = "<group>"; };
+		9CB1062502970392DD0193C4 /* StartScene.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StartScene.swift; sourceTree = "<group>"; };
+		9CB7AE211E2A92ED79A6A668 /* MazeDash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MazeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00441092E96D61C7FD01D7C /* ButtonNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ButtonNode.swift; sourceTree = "<group>"; };
+		A07E5031B31D876B7567D8E2 /* NeonData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NeonData.swift; sourceTree = "<group>"; };
+		A9A986602978C97474CDA546 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B6DABAAABC1E03C417BD688F /* LevelCardNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LevelCardNode.swift; sourceTree = "<group>"; };
+		BBE687F43F79820CE9DD0A31 /* ScrollContainerNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScrollContainerNode.swift; sourceTree = "<group>"; };
+		BC2BCFD82A462D4B5E5B57B1 /* UIStyle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UIStyle.swift; sourceTree = "<group>"; };
+		C1CB0D5F3934D7A406EA76DF /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		C5966B9DEA9EEFB088CB5D96 /* Actions.sks */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.sks; path = Actions.sks; sourceTree = "<group>"; };
+		CF53022BD43CE66F2C0C68BF /* SoundFX.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SoundFX.swift; sourceTree = "<group>"; };
+		D23146C4E79C7D796D988E2D /* MazeSolvability.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MazeSolvability.swift; sourceTree = "<group>"; };
+		D7BDC4E39E0296B02558C551 /* OverlayNodes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OverlayNodes.swift; sourceTree = "<group>"; };
+		F6D2C34AA7A2DED72674EDEB /* LevelConfig.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LevelConfig.swift; sourceTree = "<group>"; };
+		FFDD1BE705930183E7A3A5AB /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E90EA1592F15E32700471309 /* Exceptions for "MazeDash Shared" folder in "MazeDash iOS" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Actions.sks,
-				Assets.xcassets,
-				GameScene.sks,
-				GameScene.swift,
-			);
-			target = E90EA1222F15E32700471309 /* MazeDash iOS */;
-		};
-		E90EA15D2F15E32700471309 /* Exceptions for "MazeDash Shared" folder in "MazeDash tvOS" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Actions.sks,
-				Assets.xcassets,
-				GameScene.sks,
-				GameScene.swift,
-			);
-			target = E90EA1332F15E32700471309 /* MazeDash tvOS */;
-		};
-		E90EA1612F15E32700471309 /* Exceptions for "MazeDash Shared" folder in "MazeDash macOS" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Actions.sks,
-				Assets.xcassets,
-				GameScene.sks,
-				GameScene.swift,
-			);
-			target = E90EA1432F15E32700471309 /* MazeDash macOS */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		E90EA11A2F15E32600471309 /* MazeDash Shared */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				E90EA1592F15E32700471309 /* Exceptions for "MazeDash Shared" folder in "MazeDash iOS" target */,
-				E90EA15D2F15E32700471309 /* Exceptions for "MazeDash Shared" folder in "MazeDash tvOS" target */,
-				E90EA1612F15E32700471309 /* Exceptions for "MazeDash Shared" folder in "MazeDash macOS" target */,
-			);
-			path = "MazeDash Shared";
-			sourceTree = "<group>";
-		};
-		E90EA1252F15E32700471309 /* MazeDash iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "MazeDash iOS";
-			sourceTree = "<group>";
-		};
-		E90EA1352F15E32700471309 /* MazeDash tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "MazeDash tvOS";
-			sourceTree = "<group>";
-		};
-		E90EA1452F15E32700471309 /* MazeDash macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "MazeDash macOS";
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
-
 /* Begin PBXFrameworksBuildPhase section */
-		E90EA1202F15E32700471309 /* Frameworks */ = {
+		E56F61D7F0B2C6AE26CE9D45 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E90EA1312F15E32700471309 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E90EA1412F15E32700471309 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				286F5DEDFF6EDF710167F5B9 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		E90EA1152F15E32600471309 = {
+		4211E161F40DE02A245BF974 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				E90EA11A2F15E32600471309 /* MazeDash Shared */,
-				E90EA1252F15E32700471309 /* MazeDash iOS */,
-				E90EA1352F15E32700471309 /* MazeDash tvOS */,
-				E90EA1452F15E32700471309 /* MazeDash macOS */,
-				E90EA1242F15E32700471309 /* Products */,
+				FFDD1BE705930183E7A3A5AB /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		79826E4C46EF2636074F3C3C /* Base.lproj */ = {
+			isa = PBXGroup;
+			children = (
+				2C7F09E8DFDDD37FF730ABB3 /* Main.storyboard */,
+				206F3843B350DAED92F05AB9 /* LaunchScreen 09.00.14.storyboard */,
+			);
+			name = Base.lproj;
+			path = Base.lproj;
+			sourceTree = "<group>";
+		};
+		7BC2B5A5996C635F87B8DBA2 /* MazeDash iOS */ = {
+			isa = PBXGroup;
+			children = (
+				79826E4C46EF2636074F3C3C /* Base.lproj */,
+				C1CB0D5F3934D7A406EA76DF /* AppDelegate.swift */,
+				801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */,
+			);
+			name = "MazeDash iOS";
+			path = "MazeDash iOS";
+			sourceTree = "<group>";
+		};
+		88B0E8DEDF12A8205594AD32 = {
+			isa = PBXGroup;
+			children = (
+				EEC4F4FBA1D709A8495DBA97 /* Products */,
+				B5469497AC427D2F92F723FE /* Frameworks */,
+				96146AFD0402FE81E7776FD2 /* MazeDash Shared */,
+				7BC2B5A5996C635F87B8DBA2 /* MazeDash iOS */,
 			);
 			sourceTree = "<group>";
 		};
-		E90EA1242F15E32700471309 /* Products */ = {
+		96146AFD0402FE81E7776FD2 /* MazeDash Shared */ = {
 			isa = PBXGroup;
 			children = (
-				E90EA1232F15E32700471309 /* MazeDash.app */,
-				E90EA1342F15E32700471309 /* MazeDash.app */,
-				E90EA1442F15E32700471309 /* MazeDash.app */,
+				C5966B9DEA9EEFB088CB5D96 /* Actions.sks */,
+				006B3CBF39E1F18040DA7FC7 /* BundledNormalLevels.swift */,
+				A00441092E96D61C7FD01D7C /* ButtonNode.swift */,
+				766292B4D1B71AD717942F0E /* ComboSystem.swift */,
+				990E43B327CEA18B4EE8894C /* FlowSystem.swift */,
+				9A786993E5BE99321226274F /* GameScene.sks */,
+				2E19391E356A8E6A09094BA7 /* GameScene.swift */,
+				51E713F09C76BBFDF81A542E /* GlossyUI.swift */,
+				B6DABAAABC1E03C417BD688F /* LevelCardNode.swift */,
+				F6D2C34AA7A2DED72674EDEB /* LevelConfig.swift */,
+				2E5B9E1DB5076B1F8431F42E /* LevelSelectScene.swift */,
+				24B34F82C67994173B12FABB /* MazeCache.swift */,
+				5E76C13419B8AEE9E637EB84 /* MazeGenerator.swift */,
+				D23146C4E79C7D796D988E2D /* MazeSolvability.swift */,
+				719B24F37012503C91E4D910 /* MazeThemes.swift */,
+				7F1AC47FEDF538443C58E490 /* MiniMapNode.swift */,
+				A07E5031B31D876B7567D8E2 /* NeonData.swift */,
+				399057B736C71E2CFED5A532 /* NeonUI.swift */,
+				D7BDC4E39E0296B02558C551 /* OverlayNodes.swift */,
+				911860B8939D8FC96A0725D2 /* ResultOverlayNode.swift */,
+				BBE687F43F79820CE9DD0A31 /* ScrollContainerNode.swift */,
+				CF53022BD43CE66F2C0C68BF /* SoundFX.swift */,
+				9CB1062502970392DD0193C4 /* StartScene.swift */,
+				4A56075EBC94697B609E9942 /* TextureFactory.swift */,
+				15917DCB8066AC307DC88CD8 /* TopBarNode.swift */,
+				BC2BCFD82A462D4B5E5B57B1 /* UIStyle.swift */,
+				A9A986602978C97474CDA546 /* Assets.xcassets */,
+				53BAAC804F66C5300B609457 /* Audio */,
+			);
+			name = "MazeDash Shared";
+			path = "MazeDash Shared";
+			sourceTree = "<group>";
+		};
+		B5469497AC427D2F92F723FE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				4211E161F40DE02A245BF974 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		EEC4F4FBA1D709A8495DBA97 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9CB7AE211E2A92ED79A6A668 /* MazeDash.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -122,435 +184,118 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		E90EA1222F15E32700471309 /* MazeDash iOS */ = {
+		72C2E763F2D3BDDFE32677D5 /* MazeDash iOS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E90EA15A2F15E32700471309 /* Build configuration list for PBXNativeTarget "MazeDash iOS" */;
+			buildConfigurationList = 95D808A43A57293AA37B29A9 /* Build configuration list for PBXNativeTarget "MazeDash iOS" */;
 			buildPhases = (
-				E90EA11F2F15E32700471309 /* Sources */,
-				E90EA1202F15E32700471309 /* Frameworks */,
-				E90EA1212F15E32700471309 /* Resources */,
+				822AA6CDB18CC0C60954494A /* Sources */,
+				E56F61D7F0B2C6AE26CE9D45 /* Frameworks */,
+				C8E4D8D96FF51E1B3FEB86E9 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				E90EA1252F15E32700471309 /* MazeDash iOS */,
 			);
 			name = "MazeDash iOS";
-			packageProductDependencies = (
-			);
-			productName = "MazeDash iOS";
-			productReference = E90EA1232F15E32700471309 /* MazeDash.app */;
-			productType = "com.apple.product-type.application";
-		};
-		E90EA1332F15E32700471309 /* MazeDash tvOS */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = E90EA15E2F15E32700471309 /* Build configuration list for PBXNativeTarget "MazeDash tvOS" */;
-			buildPhases = (
-				E90EA1302F15E32700471309 /* Sources */,
-				E90EA1312F15E32700471309 /* Frameworks */,
-				E90EA1322F15E32700471309 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				E90EA1352F15E32700471309 /* MazeDash tvOS */,
-			);
-			name = "MazeDash tvOS";
-			packageProductDependencies = (
-			);
-			productName = "MazeDash tvOS";
-			productReference = E90EA1342F15E32700471309 /* MazeDash.app */;
-			productType = "com.apple.product-type.application";
-		};
-		E90EA1432F15E32700471309 /* MazeDash macOS */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = E90EA1622F15E32700471309 /* Build configuration list for PBXNativeTarget "MazeDash macOS" */;
-			buildPhases = (
-				E90EA1402F15E32700471309 /* Sources */,
-				E90EA1412F15E32700471309 /* Frameworks */,
-				E90EA1422F15E32700471309 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				E90EA1452F15E32700471309 /* MazeDash macOS */,
-			);
-			name = "MazeDash macOS";
-			packageProductDependencies = (
-			);
-			productName = "MazeDash macOS";
-			productReference = E90EA1442F15E32700471309 /* MazeDash.app */;
+			productName = MazeDash;
+			productReference = 9CB7AE211E2A92ED79A6A668 /* MazeDash.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		E90EA1162F15E32600471309 /* Project object */ = {
+		A8F55E490FE46109DEC7DED4 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
-					E90EA1222F15E32700471309 = {
-						CreatedOnToolsVersion = 26.2;
-					};
-					E90EA1332F15E32700471309 = {
-						CreatedOnToolsVersion = 26.2;
-					};
-					E90EA1432F15E32700471309 = {
+					72C2E763F2D3BDDFE32677D5 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
-			buildConfigurationList = E90EA1192F15E32600471309 /* Build configuration list for PBXProject "MazeDash" */;
+			buildConfigurationList = 7B63122C2B5BFBB64583BA4D /* Build configuration list for PBXProject "MazeDash" */;
+			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = E90EA1152F15E32600471309;
-			minimizedProjectReferenceProxies = 1;
+			mainGroup = 88B0E8DEDF12A8205594AD32;
+			minimizedProjectReferenceProxies = 0;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = E90EA1242F15E32700471309 /* Products */;
+			productRefGroup = EEC4F4FBA1D709A8495DBA97 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E90EA1222F15E32700471309 /* MazeDash iOS */,
-				E90EA1332F15E32700471309 /* MazeDash tvOS */,
-				E90EA1432F15E32700471309 /* MazeDash macOS */,
+				72C2E763F2D3BDDFE32677D5 /* MazeDash iOS */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		E90EA1212F15E32700471309 /* Resources */ = {
+		C8E4D8D96FF51E1B3FEB86E9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E90EA1322F15E32700471309 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E90EA1422F15E32700471309 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				769B9844331E8DBF30943DEC /* GameScene.sks in Resources */,
+				F993FC126A64DDC291FDA458 /* Assets.xcassets in Resources */,
+				1A03D7FA577302CD37AA2A59 /* Audio in Resources */,
+				BF13797EF630F1AE79B23A3C /* Main.storyboard in Resources */,
+				9D6A0C4F84F88FFD25ED6EC5 /* LaunchScreen 09.00.14.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		E90EA11F2F15E32700471309 /* Sources */ = {
+		822AA6CDB18CC0C60954494A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E90EA1302F15E32700471309 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E90EA1402F15E32700471309 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				1DE3FFAC0BE8DD01089EFA0E /* AppDelegate.swift in Sources */,
+				4C5C0C8405A2613B45406951 /* GameViewController 09.03.23.swift in Sources */,
+				AA09B38CC972F4C87B40FC4A /* BundledNormalLevels.swift in Sources */,
+				D3F464B6290B4341814E3BFC /* ButtonNode.swift in Sources */,
+				1914B34FA567D00F02897AB1 /* ComboSystem.swift in Sources */,
+				854B837989BA0B63CB4FD99C /* FlowSystem.swift in Sources */,
+				B47B939BF23EA1C6E2D2E1A2 /* GameScene.swift in Sources */,
+				3376D63E63E59FEF5E4F048E /* GlossyUI.swift in Sources */,
+				E3CD80CCDA9B0191BE6D9088 /* LevelCardNode.swift in Sources */,
+				BE7D32A9E629AA85071C1016 /* LevelConfig.swift in Sources */,
+				A1992C53EF327FF9D3E8B4ED /* LevelSelectScene.swift in Sources */,
+				BD82BD7A4E368A9F10C0ACE3 /* MazeCache.swift in Sources */,
+				FDD64A839D19145F0D221587 /* MazeGenerator.swift in Sources */,
+				61D9B902A5A4791D73D3A433 /* MazeSolvability.swift in Sources */,
+				6C2786512B1FA002680E2188 /* MazeThemes.swift in Sources */,
+				BF9D76C46897477B42E41190 /* MiniMapNode.swift in Sources */,
+				DF63A88AD7FAE7126FA3E67B /* NeonData.swift in Sources */,
+				8B7F86C079D623C77D843AC0 /* NeonUI.swift in Sources */,
+				5D274415E40F1AB3A179987D /* OverlayNodes.swift in Sources */,
+				1BA6BFB0E5CC804F0A65D06D /* ResultOverlayNode.swift in Sources */,
+				6C10A1A98C4F7FEE8D61FB95 /* ScrollContainerNode.swift in Sources */,
+				05D8E8A4F96195BB494F1DC4 /* SoundFX.swift in Sources */,
+				EE61F9C6CE51B19CF172365D /* StartScene.swift in Sources */,
+				BB0E618E5A5E54E25C6200C7 /* TextureFactory.swift in Sources */,
+				A41ACEF01EDBDE0E18ACE583 /* TopBarNode.swift in Sources */,
+				5E5A73C3215EC6E44F6BCD4D /* UIStyle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		E90EA15B2F15E32700471309 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
-				PRODUCT_NAME = MazeDash;
-				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		E90EA15C2F15E32700471309 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
-				PRODUCT_NAME = MazeDash;
-				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		E90EA15F2F15E32700471309 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "tvOS App Icon & Top Shelf Image";
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
-				PRODUCT_NAME = MazeDash;
-				SDKROOT = appletvos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 26.2;
-			};
-			name = Debug;
-		};
-		E90EA1602F15E32700471309 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "tvOS App Icon & Top Shelf Image";
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
-				PRODUCT_NAME = MazeDash;
-				SDKROOT = appletvos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 26.2;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		E90EA1632F15E32700471309 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMainStoryboardFile = Main;
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.1;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
-				PRODUCT_NAME = MazeDash;
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		E90EA1642F15E32700471309 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMainStoryboardFile = Main;
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.1;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
-				PRODUCT_NAME = MazeDash;
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		E90EA1652F15E32700471309 /* Debug */ = {
+		10908A7CABEA564DEB181F8B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-			};
-			name = Debug;
-		};
-		E90EA1662F15E32700471309 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -578,11 +323,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = UBMDRS7H3R;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
@@ -590,53 +333,169 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		4C4359BFCA1EE99A06957C6A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = "MazeDash iOS/MazeDash.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = UBMDRS7H3R;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = "LaunchScreen 09.00.14";
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
+				PRODUCT_NAME = MazeDash;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_DEVICE_FAMILY = 1;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		81EFB17A2766BD24AD617CA4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D26011FB0ED3EFCA21DB1793 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = "MazeDash iOS/MazeDash.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = UBMDRS7H3R;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = "LaunchScreen 09.00.14";
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
+				PRODUCT_NAME = MazeDash;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_DEVICE_FAMILY = 1;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		E90EA1192F15E32600471309 /* Build configuration list for PBXProject "MazeDash" */ = {
+		7B63122C2B5BFBB64583BA4D /* Build configuration list for PBXProject "MazeDash" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E90EA1652F15E32700471309 /* Debug */,
-				E90EA1662F15E32700471309 /* Release */,
+				81EFB17A2766BD24AD617CA4 /* Debug */,
+				10908A7CABEA564DEB181F8B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E90EA15A2F15E32700471309 /* Build configuration list for PBXNativeTarget "MazeDash iOS" */ = {
+		95D808A43A57293AA37B29A9 /* Build configuration list for PBXNativeTarget "MazeDash iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E90EA15B2F15E32700471309 /* Debug */,
-				E90EA15C2F15E32700471309 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E90EA15E2F15E32700471309 /* Build configuration list for PBXNativeTarget "MazeDash tvOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E90EA15F2F15E32700471309 /* Debug */,
-				E90EA1602F15E32700471309 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E90EA1622F15E32700471309 /* Build configuration list for PBXNativeTarget "MazeDash macOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E90EA1632F15E32700471309 /* Debug */,
-				E90EA1642F15E32700471309 /* Release */,
+				4C4359BFCA1EE99A06957C6A /* Release */,
+				D26011FB0ED3EFCA21DB1793 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = E90EA1162F15E32600471309 /* Project object */;
+	rootObject = A8F55E490FE46109DEC7DED4 /* Project object */;
 }

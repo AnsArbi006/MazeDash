@@ -7,14 +7,14 @@
 
 import UIKit
 import SpriteKit
-import GameplayKit
 
 class GameViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let scene = GameScene.newGameScene()
+        let scene = StartScene(size: view.bounds.size)
+        scene.scaleMode = .resizeFill
         
         // Present the scene
         let skView = self.view as! SKView
@@ -22,8 +22,8 @@ class GameViewController: UIViewController {
         
         skView.ignoresSiblingOrder = true
         
-        skView.showsFPS = true
-        skView.showsNodeCount = true
+        skView.showsFPS = false
+        skView.showsNodeCount = false
     }
 
 }

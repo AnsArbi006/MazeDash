@@ -1,0 +1,23 @@
+.DS_Store
+
+# Local audit / QA / release artifacts
+.audit/
+.audit-dd/
+.audit-release-dd/
+.codex-dd/
+.codex-startscreen.png
+.preflight-archive/
+.preflight-release/
+.qa-*.png
+.release/
+
+# Local Xcode user data / backups
+MazeDash.xcodeproj/xcuserdata/
+MazeDash.xcodeproj.pre-rebuild-backup/
+
+# Generated screenshots and raw captures
+AppStoreScreenshots/raw/
+AppStoreScreenshots/level-types/raw/
+
+# Local helper outputs
+Versions/_snapshots/*.tar.gz

@@ -1,0 +1,1091 @@
+MAZEDASH - FULL GAME DESCRIPTION
+Current project documentation snapshot
+Workspace: repository root
+Purpose of this file:
+This document describes the current game in detail from a player-facing and system-facing perspective. It is meant as a full overview of what exists in the project right now: progression, mechanics, UI, UX, rewards, bots, challenge systems, cosmetics, audio, ads, and the general flow of the game.
+
+==================================================
+1. GAME IDENTITY
+==================================================
+
+MazeDash is a neon arcade maze game built in SpriteKit.
+The core loop is:
+- read the maze quickly
+- swipe in a direction
+- move through the route efficiently
+- collect rewards where relevant
+- reach the exit as fast and as cleanly as possible
+
+The game is built around:
+- speed
+- clean route reading
+- commitment
+- gimmick learning
+- replay for better time / stars
+- cosmetic progression
+
+The visual identity is:
+- dark futuristic background
+- neon cyan / magenta / yellow / green accents
+- glossy arcade panels
+- compact HUD cards
+- animated overlays and feedback effects
+
+The game is not a free-roam maze. It is a high-clarity arcade structure with:
+- deterministic movement
+- deterministic gimmicks
+- deterministic maze generation per mode/seed
+
+
+==================================================
+2. CORE MODES
+==================================================
+
+The game currently has these main playable modes:
+
+2.1 Story Mode
+- Main structured progression mode
+- Uses fixed level indices
+- Supports stars, best times, progression unlocks, theme unlocks, cosmetic rewards
+- Can also run with an optional bot opponent if bot difficulty is enabled
+
+2.2 Time Challenge
+- Endless/chain-style timed mode
+- Player completes as many mazes as possible inside a fixed timer
+- Available durations:
+  - 1 minute
+  - 2 minutes
+  - 3 minutes
+- Tracks best completed maze count per duration
+- Uses a dedicated challenge result screen
+
+2.3 Daily Challenge
+- One fixed maze per day
+- Player chooses bot difficulty:
+  - Easy
+  - Hard
+- Goal:
+  - beat the bot
+  - earn daily coin reward
+  - optionally set a new daily best time
+- Daily reward is claim-based per difficulty and date
+- Daily completion now uses its own daily-clear result overlay
+
+2.4 Shop
+- Cosmetic progression screen
+- No real-money purchases
+- Uses gameplay-earned coins only
+- Includes rewarded ad button for +30 coins with daily limit
+
+
+==================================================
+3. CORE PLAYER CONTROLS
+==================================================
+
+3.1 Movement
+- The player uses swipe input
+- Swipes map to four cardinal directions:
+  - up
+  - down
+  - left
+  - right
+
+3.2 Movement style
+- Movement is route-based and deterministic
+- Input is interpreted as directional intent
+- The game resolves legal movement based on the current maze state and active gimmicks
+
+3.3 Pause
+- There is a pause button in gameplay HUD
+- Pause opens a dedicated pause overlay with:
+  - Resume
+  - Restart
+  - Menu
+
+3.4 Overview / Mini-map
+- The game supports overview/minimap presentation
+- This is integrated into the gameplay HUD and world presentation
+
+
+==================================================
+4. STORY PROGRESSION STRUCTURE
+==================================================
+
+Story progression is chapter-based internally.
+Each chapter contains 10 levels.
+
+Current chapter structure:
+
+Chapter 01 - Levels 1 to 10
+Name: MAZE BASICS
+Mechanics:
+- none
+Purpose:
+- pure maze reading
+- movement fundamentals
+- speed basics
+
+Chapter 02 - Levels 11 to 20
+Name: ONE-WAY SYSTEM
+Mechanics:
+- one-way only
+Purpose:
+- commitment
+- directional restriction
+- route-reading before swiping
+
+Chapter 03 - Levels 21 to 30
+Name: BREAKABLE PATHS
+Mechanics:
+- breakable walls only
+Purpose:
+- intentional impact choices
+- route opening through repeated hits
+
+Chapter 04 - Levels 31 to 40
+Name: TELEPORT NETWORK
+Mechanics:
+- teleporters only
+Purpose:
+- linked-space reading
+- portal-based route logic
+
+Chapter 05 - Levels 41 to 50
+Name: SWITCH LOGIC
+Mechanics:
+- switches / toggle blocks only
+Purpose:
+- cause and effect
+- route state changes
+
+Chapter 06 - Levels 51 to 60
+Name: KEY SYSTEM
+Mechanics:
+- key + locked exit
+Purpose:
+- the exit cannot be used until the key is collected
+- route order matters
+
+Chapter 07 - Levels 61 to 70
+Name: FOG ZONE
+Mechanics:
+- fog only
+Purpose:
+- memory
+- visibility restriction
+- navigation under uncertainty
+
+Chapter 08 - Levels 71 to 80
+Name: VECTOR SHIFT
+Mechanics:
+- one-way + teleporters
+Purpose:
+- route commitment combined with spatial redirection
+
+Chapter 09 - Levels 81 to 90
+Name: BREACH CONTROL
+Mechanics:
+- switch blocks + breakable walls
+Purpose:
+- mechanical planning
+- state change plus forced route opening
+
+Chapter 10 - Levels 91 to 100
+Name: BLACKOUT PORTALS
+Mechanics:
+- fog + teleporters
+Purpose:
+- orientation pressure
+- portal recognition under limited visibility
+
+Important note:
+- Internally Story is chapter-based up to level 100
+- The Level Select UI is currently back on the older 1.0-style flat level grid, because user feedback preferred that presentation
+- So the game currently has chapter-based content structure, but the level browsing UI still uses direct level cards instead of a dedicated chapter screen
+
+
+==================================================
+5. STORY DIFFICULTY SHAPE
+==================================================
+
+Each chapter follows the intended pattern:
+- levels 1-3 of the chapter:
+  - simple introduction
+  - low maze complexity
+  - learn the gimmick
+- levels 4-7:
+  - moderate usage
+  - more route pressure
+- levels 8-10:
+  - harder usage
+  - denser or more puzzle-like layouts
+
+The design principle is:
+- do not randomize difficulty
+- do not stack too many mechanics too early
+- let the player first learn, then apply, then master
+
+
+==================================================
+6. ACTIVE GIMMICKS / MECHANICS
+==================================================
+
+Current mechanics available in the project:
+- One-Way / directional pathing
+- Breakable Walls
+- Switch Blocks
+- Keys / Locked Exit
+- Teleporters
+- Timing Gates
+- Fog
+- Moving Blocks
+- Chaser Enemy
+
+Details for each:
+
+6.1 One-Way
+- Tiles force or restrict directional movement
+- Creates commitment and route pressure
+- Used to make the player think before moving
+
+6.2 Breakable Walls
+- Visible cracked blocks
+- Must be hit multiple times to break
+- Used for deliberate route opening
+- The system validates that required breakable usage exists in intended breakable levels
+
+6.3 Switch Blocks
+- Floor switch activates/deactivates toggle blocks
+- Designed as:
+  - floor switch
+  - toggle obstacle block
+- Used for cause/effect puzzle flow
+- Levels are validated to ensure switch usage is actually required
+
+6.4 Keys / Locked Exit
+- Current design is not a separate door tile anymore
+- Instead:
+  - the exit is locked
+  - player must collect a key first
+  - without key, the exit blocks completion
+- The exit shows a lock state when blocked
+- When key is collected:
+  - lock disappears
+  - key follows behind the player visually
+
+6.5 Teleporters
+- Paired portal logic
+- Move player or bot between linked points
+- Used to create spatial redirection and hidden path logic
+
+6.6 Timing Gates
+- Periodic open/close logic
+- Used mainly in challenge-style content
+- Adds timing pressure
+
+6.7 Fog
+- Visibility restriction mechanic
+- Explored space and visibility are limited
+- Used to create orientation and memory pressure
+
+6.8 Moving Blocks
+- New mechanic
+- Deterministic back-and-forth motion
+- Linear path
+- Constant speed
+- No randomness
+- Used for timing and spatial control
+- Currently integrated first in challenge generation rather than as a dedicated Story chapter
+
+6.9 Chaser Enemy
+- New mechanic
+- Enemy follows the player
+- Behavior types:
+  - direct chaser
+  - delayed chaser
+- Always slower than the player
+- Has delay before reacting
+- Used to create pressure without making the game random
+- Currently integrated first in challenge generation rather than as a dedicated Story chapter
+
+
+==================================================
+7. MAZE GENERATION AND FAIRNESS
+==================================================
+
+Maze generation uses structured configuration per level/mode.
+Each level config defines:
+- maze size
+- loop factor
+- branch factor
+- orb count
+- enabled mechanics
+- fog radius
+- teleporter pairs
+- key count
+- switch count
+- breakable count
+- switch block count
+- one-way density
+- moving block count
+- chaser behavior
+
+Fairness rules already present in the codebase include:
+- breakable validation:
+  - breakable levels must actually require breakable use
+- switch validation:
+  - switch levels must contain real switch logic and require switch usage
+- challenge generation avoids certain unfair stacks
+- chaser speed is kept below player speed
+- moving blocks are deterministic, not random
+
+Important design point:
+- the game is trying to be hard in a fair way
+- not luck-based
+
+
+==================================================
+8. STARS, BEST TIMES, AND PERFORMANCE
+==================================================
+
+8.1 Story star system
+- Story levels can award 0 to 3 stars
+- Best time and max stars are stored per level
+
+8.2 Current star threshold logic
+Per level, benchmark data stores:
+- easyBotTime
+- hardBotTime
+- oneStarTime
+- twoStarTime
+- threeStarTime
+
+Current formula:
+- 1 star = easy bot benchmark
+- 2 stars = hard + 55% of the gap between easy and hard
+- 3 stars = hard * 1.15
+
+This system was already rebalanced to avoid the old problem where 3 stars were too close to a perfect solver benchmark.
+
+8.3 Challenge records
+Time Challenge stores:
+- best maze count for each duration
+
+8.4 Daily records
+Daily Challenge stores:
+- best time per day
+- reward claim state per difficulty
+
+
+==================================================
+9. BOT SYSTEM
+==================================================
+
+Bot difficulties:
+- Off
+- Easy
+- Hard
+
+9.1 Easy Bot
+- weak baseline opponent
+- used for accessible race pressure and lower benchmark
+
+9.2 Hard Bot
+- stronger pathing benchmark / opponent
+- used for harder competition and performance measurement
+
+9.3 Bot Race usage
+Bots can be used in:
+- Daily Challenge
+- optional race situations in gameplay flow
+
+9.4 Daily bot reward model
+- Easy bot clear gives easier reward tier
+- Hard bot clear gives larger reward tier
+
+
+==================================================
+10. DAILY CHALLENGE SYSTEM
+==================================================
+
+The Daily Challenge system contains:
+- one descriptor per day
+- day key
+- display date
+- reference level
+- config
+- reward values
+
+Daily rewards:
+- Easy reward: 60 coins
+- Hard reward: 140 coins
+
+Daily progression stores:
+- best time
+- easy claimed state
+- hard claimed state
+
+Daily clear experience now includes:
+- dedicated daily result overlay
+- stronger reward presentation
+- daily status block
+- best-time emphasis
+- reward state:
+  - reward granted
+  - reward already claimed
+- optional new-best highlight
+
+
+==================================================
+11. TIME CHALLENGE SYSTEM
+==================================================
+
+The Time Challenge system:
+- lets the player choose a duration
+- runs a chain of mazes
+- counts completed mazes before the timer expires
+- stores best result per duration
+- uses its own challenge result overlay
+
+The mode emphasizes:
+- speed
+- consistency
+- route clarity under time pressure
+
+
+==================================================
+12. LEVEL SELECT UI
+==================================================
+
+Current state:
+- reverted toward the older 1.0-style presentation based on user feedback
+- uses direct level cards rather than the newer chapter-browser-only concept
+
+Current Level Select characteristics:
+- classic flat level grid
+- top status chips
+- current level status
+- bot difficulty toggle
+- direct tap-to-level access
+
+Current important card states:
+- default
+- completed
+- perfect / 3-star
+- current / next level
+
+Special visual rule:
+- if a level has all 3 stars, its success state is green
+
+Recent fixes already applied to Level Select:
+- `L22` style labels were changed to `LVL 22`
+- card overlap issues were fixed
+- cheap green transparent boxes were removed from perfect cards
+- the user-preferred older layout/proportion path was restored
+
+
+==================================================
+13. START MENU / MAIN MENU UI
+==================================================
+
+StartScene is the main front-end shell.
+Main actions include:
+- Story
+- Time Challenge
+- Daily
+- Shop
+
+The shell includes:
+- animated background
+- title presentation
+- top-level buttons
+- transitions to secondary scenes
+
+Main secondary scenes from StartScene:
+- ChallengeSelectScene
+- DailyChallengeScene
+- ShopScene
+
+
+==================================================
+14. DAILY CHALLENGE UI
+==================================================
+
+DailyChallengeScene shows:
+- title
+- current daily descriptor
+- best time if available
+- difficulty-specific action buttons
+
+Each daily difficulty card shows:
+- reward amount
+- difficulty information
+- status:
+  - available
+  - completed
+  - already claimed
+
+The scene also supports:
+- completion reveal animation tracking
+- daily best display
+- explanation that the maze changes daily
+
+
+==================================================
+15. TIME CHALLENGE SELECT UI
+==================================================
+
+ChallengeSelectScene shows:
+- available durations
+- summary line per duration
+- best result per duration
+
+Flow:
+- open challenge select
+- choose 1/2/3 minute card
+- launch GameScene in time challenge mode
+
+
+==================================================
+16. SHOP SYSTEM
+==================================================
+
+The Shop contains:
+- Player Colors
+- Player Patterns
+- Trails
+- Win FX
+- Portals
+
+Shop uses:
+- coin total
+- item ownership
+- item equip state
+- reward-only items tied to story milestones
+
+16.1 Shop item states
+- equipped
+- owned
+- purchasable for coins
+- reward-only unlock
+
+16.2 Rewarded ad coins
+There is a button:
+- WATCH AD +30
+
+Rules:
+- 30 coins on successful rewarded completion
+- daily limit: 2 claims per local day
+- no reward on failure or close
+
+16.3 Shop celebration
+Successful rewarded claim already includes:
+- confirm motion
+- reward burst label
+- coin animation toward the coin card
+
+
+==================================================
+17. COSMETICS
+==================================================
+
+Cosmetic categories:
+- Player skins
+- Trails
+- Win animations
+- Teleporter skins
+
+17.1 Player skins
+Examples:
+- Neon Cyan
+- Neon Pink
+- Electric Purple
+- Toxic Green
+- Golden Pulse
+- Grid Core
+- Pulse Core
+- Glitch Skin
+- Energy Stripes
+- Dual Core
+
+17.2 Trail styles
+Examples:
+- Classic Neon
+- Electric Sparks
+- Smooth Light
+- Pixel Trail
+- Pulse Trail
+- Energy Burst
+- Orbit Trail
+
+17.3 Win animations
+Examples:
+- Neon Explosion
+- Energy Implosion
+- Pixel Shatter
+- Shockwave Ring
+- Light Beam Finish
+
+17.4 Teleporter skins
+Examples:
+- Classic Portal
+- Digital Glitch
+- Energy Vortex
+- Split Portal
+- Quantum Portal
+
+
+==================================================
+18. STORY REWARD UNLOCKS
+==================================================
+
+Story milestone cosmetic rewards currently include:
+
+Level 5
+- Golden Pulse
+
+Level 10
+- Grid Core
+
+Level 15
+- Energy Burst
+
+Level 20
+- Light Beam Finish
+
+Level 25
+- Quantum Portal
+
+Level 30
+- Energy Stripes
+
+Level 35
+- Dual Core
+
+These are granted through the story reward system and can auto-equip when unlocked.
+
+
+==================================================
+19. THEME UNLOCK SYSTEM
+==================================================
+
+The game also includes maze theme unlock progression.
+
+There is a dedicated theme progress system:
+- stores unlocked themes
+- supports theme unlock count
+
+The game previously added milestone-style theme unlocks every few levels.
+The exact active theme presentation depends on the currently selected theme and progression state.
+
+
+==================================================
+20. ACHIEVEMENT SYSTEM
+==================================================
+
+Current achievements include:
+- FIRST ESCAPE
+- TRIPLE STAR
+- FIVE DOWN
+- FLOW COLLECTOR
+- THEME SHIFT
+- ELITE RUNNER
+
+Achievement logic is based on:
+- completed levels
+- 3-star levels
+- total flow points
+- unlocked themes
+
+
+==================================================
+21. FLOW / COMBO SYSTEMS
+==================================================
+
+The project contains:
+- ComboSystem
+- FlowSystem
+
+These systems support:
+- performance rhythm
+- combo feedback
+- HUD reactions
+- flow orbs / run-based flow scoring
+
+The game also shows:
+- flow bonus labels
+- combo pulses
+- performance-related reward feedback
+
+
+==================================================
+22. GAMEPLAY HUD
+==================================================
+
+The gameplay HUD includes:
+- top bar
+- level / mode display
+- timer
+- star card
+- pause button
+- coins / left-side metrics depending on mode
+
+HUD behavior:
+- animated entrance at level start
+- updates live during gameplay
+- reacts to flow/combo states
+
+Recent HUD improvements already added:
+- level-start entrance animation
+- better timer formatting
+- `LVL` labeling instead of short `L`
+
+
+==================================================
+23. RESULT SCREENS / END SCREENS
+==================================================
+
+There are now multiple result paths:
+
+23.1 Normal Story Result
+- generic result overlay
+- stars
+- your time
+- requirement rows
+- buttons:
+  - next
+  - retry
+  - menu
+
+23.2 Time Challenge Result
+- dedicated challenge result overlay
+- mazes completed
+- duration summary
+- best run
+- retry/menu
+
+23.3 Daily Challenge Result
+- dedicated daily clear overlay
+- daily cleared headline
+- bot difficulty badge
+- your time
+- daily best
+- reward hero panel
+- new best or completion status
+- retry/menu
+
+
+==================================================
+24. RECENT ANIMATION PASS
+==================================================
+
+The game already has a broader animation pass integrated.
+These include:
+
+- Level-start entrance
+- Orb collect burst
+- Exit / goal activation wave
+- Switch activation feedback
+- Teleport warp effect
+- Stronger result popup motion
+- Level-card unlock reveal
+- Shop reward claim animation
+- Current-level highlight in level select
+- Better button confirm motion
+
+These are already part of the active project state.
+
+
+==================================================
+25. MOVING BLOCK SYSTEM
+==================================================
+
+Moving blocks are implemented with these design rules:
+- deterministic movement
+- linear horizontal or vertical motion
+- back-and-forth between two points
+- constant speed
+- no random behavior
+
+Gameplay purpose:
+- timing challenge
+- spatial denial
+- route waiting pressure
+
+Fairness principles:
+- player can read the pattern
+- player can wait or route around it
+- no hidden randomness
+
+
+==================================================
+26. CHASER ENEMY SYSTEM
+==================================================
+
+The chaser system currently supports:
+- direct chaser
+- delayed chaser
+
+Rules:
+- slower than player
+- not instant reaction
+- has delay before path updates
+- must not create unavoidable traps
+
+Failure condition:
+- if chaser reaches player, run fails
+
+Important bug already fixed:
+- returning to the start tile no longer causes fake death in non-chaser levels
+
+
+==================================================
+27. SWITCH SYSTEM
+==================================================
+
+The switch mechanic was recently improved.
+
+Current design intent:
+- switch is a floor trigger
+- toggle block is a separate obstacle state
+- stepping on switch changes toggle blocks
+
+Important rules:
+- switch levels must actually require at least one switch usage
+- switch and block visuals are separated
+- text on blocks was removed so the mechanic reads more like game-space, not debug symbols
+
+
+==================================================
+28. KEY / LOCKED EXIT SYSTEM
+==================================================
+
+Current key system behavior:
+- the exit is visibly locked if no key is owned
+- trying to finish without the key is blocked
+- the exit lock disappears after the key is collected
+- the collected key follows behind the player
+
+Current UI concerns from recent user feedback:
+- key readability and lock readability were actively being tuned
+- glow intensity and readability were recent polish targets
+
+
+==================================================
+29. AUDIO SYSTEM
+==================================================
+
+The game has a centralized sound system in SoundFX.swift.
+
+Audio responsibilities include:
+- UI interaction sounds
+- reward sounds
+- teleport sounds
+- button taps
+- win / loss / feedback sounds
+- shell transitions
+
+The audio system is centralized and semantically mapped rather than scattered.
+
+Earlier UX analysis showed:
+- technically the audio system is strong
+- content variety can still be expanded
+
+
+==================================================
+30. AD SYSTEM
+==================================================
+
+There is ad architecture in the game.
+
+Active ad types:
+- interstitials
+- rewarded ads
+
+Story / Time Challenge interstitial logic:
+- counters increment on completed runs
+- ad becomes due after 5 completions
+- only shown at natural transition points
+- if unavailable, gameplay continues and trigger is not consumed
+
+Rewarded shop ads:
+- +30 coins
+- max 2 per day
+- must fully complete rewarded flow
+
+Current technical state:
+- in DEBUG, ads are simulated
+- in non-debug, real SDK is not yet wired, so unavailable path is used
+
+So:
+- ad logic exists
+- real network integration is still not final
+
+
+==================================================
+31. UI / UX PHILOSOPHY
+==================================================
+
+The current UI direction aims for:
+- compact arcade readability
+- layered glossy cards
+- strong neon accents only where important
+- subtle motion, not chaos
+- strong cause/effect feedback
+
+Repeated design goals across the project:
+- avoid random frustration
+- keep progression readable
+- keep UI premium, not template-like
+- separate large transitions from small interactions
+
+
+==================================================
+32. SAFE AREA / NOTCH SUPPORT
+==================================================
+
+The project has specific safe-area handling for overlays and result screens.
+
+Important example:
+- the result popup was fixed to respect iPhone safe areas
+- overlays are now positioned against safe bounds rather than unsafe full-screen assumptions
+
+
+==================================================
+33. KNOWN CURRENT STRUCTURAL STATE
+==================================================
+
+This is the current practical state of the project:
+
+- Story progression:
+  - chapter-based internally
+  - 100 levels currently defined in grouped progression structure
+
+- Level Select:
+  - user-preferred older grid path restored
+  - not yet converted into a full chapter-select-first UI
+
+- New mechanics:
+  - moving blocks and chaser exist
+  - currently introduced more safely through challenge-generation paths first
+
+- Daily Challenge:
+  - now has stronger dedicated completion screen
+
+- Ads:
+  - logic present
+  - production SDK wiring still pending
+
+
+==================================================
+34. PLAYER-FACING LOOP SUMMARY
+==================================================
+
+A player can currently:
+- open the game
+- continue story progression
+- replay earlier levels for better stars
+- unlock themes and cosmetics
+- run Time Challenge for record counts
+- run Daily Challenge against a bot for coins
+- enter the Shop
+- buy/equip skins, trails, win effects, portal skins
+- watch a rewarded ad in shop for extra coins
+- improve best times
+- earn achievements
+
+
+==================================================
+35. TECHNICAL ACTIVE FILE MAP
+==================================================
+
+These are the main gameplay-facing source files and what they do:
+
+StartScene.swift
+- main menu
+- challenge select
+- daily challenge select
+- shop
+
+GameScene.swift
+- active gameplay scene
+- movement
+- maze interaction
+- gimmick behavior
+- result flow
+- overlays
+- bot/chaser behavior
+
+LevelConfig.swift
+- mechanic definitions
+- story chapter structure
+- level config generation
+
+NeonData.swift
+- progression stores
+- stars / benchmark data
+- daily store
+- challenge store
+- coins
+- cosmetics
+- achievements
+- ad service
+
+LevelSelectScene.swift
+- story level browsing UI
+
+LevelCardNode.swift
+- individual level card visuals and states
+
+OverlayNodes.swift
+- shared overlay components
+
+ResultOverlayNode.swift
+- normal result popup
+- challenge result popup
+- daily result popup
+
+MazeGenerator.swift
+- maze creation
+- mechanic placement
+
+MazeSolvability.swift
+- path / validation logic
+
+SoundFX.swift
+- centralized audio logic
+
+
+==================================================
+36. SHORT HIGH-LEVEL CONCLUSION
+==================================================
+
+MazeDash is currently a structured neon arcade maze game with:
+- Story progression
+- chapter-based gimmick escalation
+- stars and best times
+- Time Challenge
+- Daily Challenge
+- Shop and cosmetics
+- achievements
+- theme and milestone rewards
+- bots
+- new moving hazard / enemy systems
+- ad architecture
+- animation-heavy polish pass
+
+The project is no longer just a simple maze prototype.
+It already contains:
+- progression systems
+- reward systems
+- multiple game modes
+- multiple result flows
+- cosmetic economy
+- replay motivation
+- challenge content
+
+The two biggest high-level structural facts right now are:
+- content/progression breadth is large
+- some UI systems are intentionally still using the older player-preferred layout rather than the newer more theoretical chapter browser concept
+
+End of file.

@@ -1,0 +1,11 @@
+name = "mazedash-leaderboard"
+main = "src/index.ts"
+compatibility_date = "2026-04-16"
+
+# Free public URL after deploy:
+# https://mazedash-leaderboard.<your-subdomain>.workers.dev
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mazedash_leaderboard"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

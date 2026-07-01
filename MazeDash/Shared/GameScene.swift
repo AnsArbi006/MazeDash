@@ -89,6 +89,11 @@ final class GameScene: SKScene {
         case paused
     }
 
+    private enum PendingTutorial {
+        case basics
+        case mechanic(Mechanic)
+    }
+
     private enum RaceWinner {
         case player
         case bot
@@ -98,6 +103,7 @@ final class GameScene: SKScene {
         let point: GridPoint
         let hasKey: Bool
         let switchActive: Bool
+        let breakHits: [UInt8]
     }
 
     private let runMode: GameRunMode
@@ -125,14 +131,26 @@ final class GameScene: SKScene {
     private var currentStarBenchmarks: LevelBenchmarkData?
 
     private var orbNodes: [GridPoint: SKSpriteNode] = [:]
-    private var keyNodes: [GridPoint: SKSpriteNode] = [:]
+    private var timeBonusNodes: [GridPoint: SKNode] = [:]
+    private var keyNodes: [GridPoint: SKNode] = [:]
     private var switchNodes: [GridPoint: SKNode] = [:]
-    private var doorNodes: [GridPoint: SKSpriteNode] = [:]
+    private var switchBlockNodes: [GridPoint: SKSpriteNode] = [:]
+    private var orderedSwitchBlockPoints: [GridPoint] = []
+    private var breakableNodes: [GridPoint: SKNode] = [:]
     private var gateNodes: [GridPoint: SKSpriteNode] = [:]
     private var gateTiles: Set<GridPoint> = []
     private var oneWayDirections: [GridPoint: MoveDirection] = [:]
     private var teleporterMap: [GridPoint: GridPoint] = [:]
     private var teleporterNodes: [GridPoint: SKSpriteNode] = [:]
+    private var movingBlockDefinitions: [MovingBlockData] = []
+    private var movingBlockTracks: [Int: [GridPoint]] = [:]
+    private var movingBlockNodes: [Int: SKNode] = [:]
+    private var movingBlockOccupiedTiles: Set<GridPoint> = []
+    private var exitMarkerNode: SKSpriteNode?
+    private var exitGlowNode: SKShapeNode?
+    private var exitLockNode: SKNode?
+    private var keyFollowerNode: SKNode?
+    private var routeHintNode: SKNode?
 
     private var timerCard: SKSpriteNode?
     private var timerLabel = SKLabelNode()
@@ -179,13 +197,26 @@ final class GameScene: SKScene {
     private var pauseOverlay: PauseOverlayNode?
     private var resultOverlay: ResultOverlayNode?
     private var challengeResultOverlay: ChallengeResultOverlayNode?
+    private var dailyResultOverlay: DailyResultOverlayNode?
+    private var storyLeaderboardOverlay: StoryLevelLeaderboardOverlayNode?
+    private var storyLeaderboardFetchTask: Task<Void, Never>?
+    private var leaderboardNameOverlay: LeaderboardNamePromptOverlayNode?
     private var tutorialOverlay: MechanicTutorialOverlayNode?
     private var rewardUnlockOverlay: RewardUnlockOverlayNode?
+    private lazy var gameplayKeyIconTexture = SKTexture(imageNamed: "GameplayKeyIcon")
+    private lazy var gameplayTimeBonusIconTexture = SKTexture(imageNamed: "GameplayTimeBonusIcon")
+    private lazy var exitLockClosedIconTexture = SKTexture(imageNamed: "ExitLockClosed")
+    private lazy var exitLockOpenIconTexture = SKTexture(imageNamed: "ExitLockOpen")
     private var loadingLabel: SKLabelNode?
     private var loadingIndicatorWorkItem: DispatchWorkItem?
     private var overviewOverlay: SKNode?
     private var overviewMapNode: MiniMapNode?
     private var overviewCloseButton: ArcadeButtonNode?
+    #if os(iOS) || os(tvOS)
+    private var leaderboardTextField: UITextField?
+    #endif
+    private var requiresLeaderboardNamePrompt = false
+    private var pendingStoryLeaderboardLevelId: Int?
 
     private var currentGameState: GameState = .idle
     private var isMoving = false
@@ -197,9 +228,12 @@ final class GameScene: SKScene {
     private var forcedDirection: MoveDirection?
     private var keyCount: Int = 0
     private var switchActivated = false
+    private var breakableHits: [GridPoint: Int] = [:]
+    private var orderedBreakablePoints: [GridPoint] = []
     private var gateIsOpen: Bool = true
 
     private var elapsedTime: TimeInterval = 0
+    private var challengeBonusTime: TimeInterval = 0
     private var lastTimerUpdate: TimeInterval?
     private var runStartTime: TimeInterval?
     private var accumulatedPausedTime: TimeInterval = 0
@@ -222,8 +256,29 @@ final class GameScene: SKScene {
     private let perfectWindow: TimeInterval = 0.12
     private let goodWindow: TimeInterval = 0.25
     private let stepDuration: TimeInterval = MazeTiming.stepDuration
+    private let hardBotStepMultiplier: TimeInterval = 1.1
+    private let hardBotTurnHesitation: TimeInterval = 0.045
+    private var mazeMechanicStartTime: TimeInterval = 0
+    private var playerPathHistory: [GridPoint] = []
+    private var chaserNode: SKSpriteNode?
+    private var chaserGrid = GridPoint(row: 0, col: 0)
+    private var chaserCurrentDirection: MoveDirection?
+    private var chaserBehavior: ChaserBehavior?
+    private var chaserIsMoving = false
+    private var chaserCaughtPlayer = false
+    private var chaserStartAt: TimeInterval = 0
+    private var chaserNextStepTime: TimeInterval = 0
+    private var chaserNextRepathTime: TimeInterval = 0
+    private var chaserStartDelay: TimeInterval = 1.1
+    private var chaserRepathDelay: TimeInterval = 0.28
+    private var chaserSpeedMultiplier: Double = 0.84
+    private var chaserTrailDelaySteps = 0
+    private var chaserRevealPlayed = false
+    private var chaserTargetLockPlayed = false
+    private var chaserThreatLevel = 0
 
     private var swipeStart: CGPoint?
+    private var swipeConsumed = false
     private var activeButton: ArcadeButtonNode?
     private var isMiniMapTouch = false
     private var miniMapNode: MiniMapNode?
@@ -232,8 +287,17 @@ final class GameScene: SKScene {
     private var miniMapSetupDeadline: TimeInterval = 0
     private var mazeBounds: CGRect = .zero
 
-    private var doorsAreUnlocked: Bool {
-        keyCount > 0 || switchActivated
+    private var exitRequiresKey: Bool {
+        levelConfig.enabledMechanics.contains(.keysDoors)
+    }
+
+    private var exitIsUnlocked: Bool {
+        !exitRequiresKey || keyCount > 0
+    }
+
+    private struct RouteHintStep {
+        let destination: GridPoint
+        let touchedPoints: [GridPoint]
     }
     private var fogNode: SKNode?
     private var fogTileMapNode: SKTileMapNode?
@@ -347,6 +411,7 @@ final class GameScene: SKScene {
         teardownLifecycleObservers()
         hardBotCacheWorkItem?.cancel()
         hardBotCacheWorkItem = nil
+        teardownLeaderboardTextField()
     }
 
     deinit {
@@ -406,6 +471,25 @@ final class GameScene: SKScene {
             }
             overlay.layout(in: size, safeTop: safeTop, safeBottom: safeBottom)
             overlay.setScale(1.0)
+        }
+        if let overlay = storyLeaderboardOverlay {
+            let safeTop = size.height / 2 - safeAreaInsets.top
+            let safeBottom = -size.height / 2 + safeAreaInsets.bottom
+            if overlay.parent == nil {
+                hudNode.addChild(overlay)
+            }
+            overlay.layout(in: size, safeTop: safeTop, safeBottom: safeBottom)
+            overlay.setScale(1.0)
+        }
+        if let overlay = leaderboardNameOverlay {
+            let safeTop = size.height / 2 - safeAreaInsets.top
+            let safeBottom = -size.height / 2 + safeAreaInsets.bottom
+            if overlay.parent == nil {
+                hudNode.addChild(overlay)
+            }
+            overlay.layout(in: size, safeTop: safeTop, safeBottom: safeBottom)
+            overlay.setScale(1.0)
+            layoutLeaderboardTextField()
         }
     }
 
@@ -468,6 +552,7 @@ final class GameScene: SKScene {
     private func setupWorld(with maze: MazeData) {
         currentTheme = ThemeUnlocker.theme(for: activeThemeLevelId)
         TextureFactory.shared.setTheme(currentTheme)
+        mazeMechanicStartTime = CACurrentMediaTime()
         updateBackground()
         worldNode.removeAllChildren()
         trailNode.removeAllChildren()
@@ -477,8 +562,16 @@ final class GameScene: SKScene {
         trailNode.zPosition = 18
         worldNode.addChild(trailNode)
         orbNodes.removeAll()
+        timeBonusNodes.removeAll()
         tileMapNode?.removeFromParent()
         tileMapNode = nil
+        exitMarkerNode = nil
+        exitGlowNode = nil
+        exitLockNode = nil
+        movingBlockDefinitions = maze.movingBlocks
+        movingBlockTracks.removeAll()
+        movingBlockNodes.removeAll()
+        movingBlockOccupiedTiles.removeAll()
         botNode = nil
         botGrid = maze.start
         botCurrentDirection = nil
@@ -488,6 +581,23 @@ final class GameScene: SKScene {
         botHasStarted = false
         botFinishTime = nil
         hardBotDirectionCache.removeAll(keepingCapacity: true)
+        playerPathHistory = [maze.start]
+        chaserNode = nil
+        chaserGrid = maze.start
+        chaserCurrentDirection = nil
+        chaserBehavior = maze.chaserSpawn?.behavior
+        chaserIsMoving = false
+        chaserCaughtPlayer = false
+        chaserStartDelay = maze.chaserSpawn?.startDelay ?? 1.1
+        chaserRepathDelay = maze.chaserSpawn?.repathDelay ?? 0.28
+        chaserSpeedMultiplier = maze.chaserSpawn?.speedMultiplier ?? 0.84
+        chaserTrailDelaySteps = maze.chaserSpawn?.trailDelaySteps ?? 0
+        chaserStartAt = mazeMechanicStartTime + chaserStartDelay
+        chaserNextStepTime = chaserStartAt
+        chaserNextRepathTime = chaserStartAt
+        chaserRevealPlayed = false
+        chaserTargetLockPlayed = false
+        chaserThreatLevel = 0
         needsExplorationRefresh = false
         lastExplorationRefreshTime = -10
         lastMiniMapPlayerWorldPosition = nil
@@ -563,25 +673,35 @@ final class GameScene: SKScene {
         exitMarker.addChild(exitShadow)
         let exitGlow = makeGlowHalo(radius: tileSize * 0.24, color: currentTheme.palette.accentPink, alpha: 0.58, glowWidth: 14)
         exitGlow.zPosition = -1
-        exitGlow.run(.repeatForever(.sequence([
-            .group([
-                .fadeAlpha(to: 0.82, duration: 0.4),
-                .scale(to: 1.08, duration: 0.4)
-            ]),
-            .group([
-                .fadeAlpha(to: 0.52, duration: 0.4),
-                .scale(to: 1.0, duration: 0.4)
-            ])
-        ])))
         exitMarker.addChild(exitGlow)
         worldNode.addChild(exitMarker)
+        exitMarkerNode = exitMarker
+        exitGlowNode = exitGlow
+        exitLockNode?.removeFromParent()
+        if exitRequiresKey {
+            let lockNode = makeExitLockNode()
+            lockNode.zPosition = 2
+            exitMarker.addChild(lockNode)
+            exitLockNode = lockNode
+        } else {
+            exitLockNode = nil
+        }
+        updateExitLockVisuals(animated: false)
 
         for orbPoint in maze.orbs {
-            let orb = SKSpriteNode(texture: orbTexture)
-            orb.position = positionFor(orbPoint)
-            orb.zPosition = 12
-            worldNode.addChild(orb)
-            orbNodes[orbPoint] = orb
+            if isChallengeMode {
+                let bonus = makeTimeBonusPickupNode()
+                bonus.position = positionFor(orbPoint)
+                bonus.zPosition = 12
+                worldNode.addChild(bonus)
+                timeBonusNodes[orbPoint] = bonus
+            } else {
+                let orb = SKSpriteNode(texture: orbTexture)
+                orb.position = positionFor(orbPoint)
+                orb.zPosition = 12
+                worldNode.addChild(orb)
+                orbNodes[orbPoint] = orb
+            }
         }
 
         playerGrid = maze.start
@@ -611,6 +731,8 @@ final class GameScene: SKScene {
         playerNode = player
         refreshTrailOrbit()
         setupBotIfNeeded(texture: playerTexture, start: maze.start)
+        setupChaserIfNeeded(texture: playerTexture)
+        updateMovingBlocks(now: mazeMechanicStartTime)
 
         let mazeWidth = CGFloat(maze.cols) * tileSize
         let mazeHeight = CGFloat(maze.rows) * tileSize
@@ -621,6 +743,7 @@ final class GameScene: SKScene {
         updateCameraPosition(animated: true)
         setupFog()
         scheduleHardBotDirectionCachePriming()
+        runLevelStartEntrance(startMarker: startMarker, exitMarker: exitMarker)
     }
 
     private func loadMaze() {
@@ -735,9 +858,9 @@ final class GameScene: SKScene {
         }
         setupWorld(with: maze)
         setupHUD()
-        if let mechanic = pendingTutorialMechanic() {
+        if let tutorial = pendingTutorial() {
             setGameState(.idle)
-            showTutorialOverlay(for: mechanic)
+            showTutorialOverlay(for: tutorial)
         } else if isChallengeMode, runStartTime != nil {
             setGameState(.playing)
         } else {
@@ -796,12 +919,6 @@ final class GameScene: SKScene {
         bar.alpha = 0.98
         hudNode.addChild(bar)
         topHudBar = bar
-
-        let barBreath = SKAction.sequence([
-            .fadeAlpha(to: 0.99, duration: 2.6),
-            .fadeAlpha(to: 0.965, duration: 3.2)
-        ])
-        bar.run(.repeatForever(barBreath), withKey: "hudBreath")
 
         let pauseWidth: CGFloat = 64
         var timerWidth = min(156, max(132, barWidth * 0.35))
@@ -1095,34 +1212,34 @@ final class GameScene: SKScene {
     }
 
     private var shouldShowSwipeHint: Bool {
-        guard !isChallengeMode, !isDailyMode else { return false }
-        guard levelDefinition.id == 1 else { return false }
-        return !UserDefaults.standard.bool(forKey: Self.swipeHintSeenKey)
+        isChallengeMode && currentGameState == .idle
     }
 
     private func updateSwipeHintIfNeeded() {
-        guard shouldShowSwipeHint else {
-            swipeHintLabel?.removeFromParent()
-            swipeHintLabel = nil
+        if shouldShowSwipeHint {
+            if swipeHintLabel == nil {
+                let label = SKLabelNode(fontNamed: ArcadeFont.body)
+                label.fontSize = 14
+                label.fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.9)
+                label.horizontalAlignmentMode = .center
+                label.verticalAlignmentMode = .center
+                label.text = "SWIPE TO START"
+                label.zPosition = 120
+                label.alpha = 0
+                hudNode.addChild(label)
+                label.run(.fadeAlpha(to: 0.96, duration: 0.18))
+                swipeHintLabel = label
+            } else {
+                swipeHintLabel?.text = "SWIPE TO START"
+            }
+
+            let safeBottom = -size.height / 2 + safeAreaInsets.bottom
+            swipeHintLabel?.position = snap(CGPoint(x: 0, y: safeBottom + 34))
             return
         }
 
-        if swipeHintLabel == nil {
-            let label = SKLabelNode(fontNamed: ArcadeFont.body)
-            label.fontSize = 14
-            label.fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.86)
-            label.horizontalAlignmentMode = .center
-            label.verticalAlignmentMode = .center
-            label.text = "SWIPE TO MOVE"
-            label.zPosition = 120
-            label.alpha = 0
-            hudNode.addChild(label)
-            label.run(.fadeAlpha(to: 0.92, duration: 0.18))
-            swipeHintLabel = label
-        }
-
-        let safeBottom = -size.height / 2 + safeAreaInsets.bottom
-        swipeHintLabel?.position = snap(CGPoint(x: 0, y: safeBottom + 34))
+        swipeHintLabel?.removeFromParent()
+        swipeHintLabel = nil
     }
 
     private func dismissSwipeHintIfNeeded(markShown: Bool) {
@@ -1140,13 +1257,13 @@ final class GameScene: SKScene {
         let secondaryText: String
 
         if let duration = challengeDuration {
-            primaryText = "\(duration.rawValue) MIN"
+            primaryText = duration.hudTitle
             secondaryText = "RUN \(max(1, challengeMazeNumber))"
         } else if isDailyMode {
             primaryText = "DAILY"
             secondaryText = botDifficulty == .hard ? "BOT HARD" : "BOT EASY"
         } else {
-            primaryText = "L\(levelDefinition.id)"
+            primaryText = "LVL \(levelDefinition.id)"
             switch botDifficulty {
             case .off:
                 secondaryText = "NORMAL"
@@ -1205,9 +1322,13 @@ final class GameScene: SKScene {
 
         let ordered: [(Mechanic, String)] = [
             (.oneWay, "→"),
-            (.keysDoors, "KEY"),
+            (.breakableWalls, "BREAK"),
+            (.keysDoors, "🗝"),
             (.teleporters, "TP"),
             (.timingGates, "GATE"),
+            (.switchBlocks, "SW"),
+            (.movingBlocks, "MOVE"),
+            (.chaserEnemy, "CHASE"),
             (.fog, "FOG")
         ]
         let badges = ordered.filter { mechanics.contains($0.0) }.map { $0.1 }
@@ -1415,20 +1536,48 @@ final class GameScene: SKScene {
             ]), withKey: "botWait")
             return
         }
+        if registerBreakableHit(at: next, triggeredByBot: true) {
+            if botDifficulty == .easy {
+                easyBotLoopTracker.recordMove(from: botGrid, to: botGrid, facing: directionToUse)
+            }
+            bot.removeAllActions()
+            bot.run(.sequence([
+                .wait(forDuration: 0.05),
+                .run { [weak self] in self?.stepBotForward() }
+            ]), withKey: "botBreakWait")
+            return
+        }
         guard botCanEnter(next, hasKey: keyCount > 0, switchActive: switchActivated, allowClosedGate: false) else {
+            if movingBlockOccupiedTiles.contains(next) {
+                bot.removeAllActions()
+                bot.run(.sequence([
+                    .wait(forDuration: 0.06),
+                    .run { [weak self] in self?.stepBotForward() }
+                ]), withKey: "botMovingBlockWait")
+                return
+            }
             botIsMoving = false
             return
         }
 
         let destination = botPositionFor(next)
-        let moveAction = SKAction.move(to: destination, duration: stepDuration)
+        let moveDuration = botDifficulty == .hard ? stepDuration * hardBotStepMultiplier : stepDuration
+        let moveAction = SKAction.move(to: destination, duration: moveDuration)
         moveAction.timingMode = .linear
-        bot.run(.sequence([
-            moveAction,
-            .run { [weak self] in
-                self?.handleBotArrival(at: next)
-            }
-        ]), withKey: "botStep")
+        let shouldHesitateBeforeMove = botDifficulty == .hard
+            && botCurrentDirection != nil
+            && isIntersectionOrCorner(botGrid.row, botGrid.col)
+            && botForcedDirection == nil
+
+        var actions: [SKAction] = []
+        if shouldHesitateBeforeMove {
+            actions.append(.wait(forDuration: hardBotTurnHesitation))
+        }
+        actions.append(moveAction)
+        actions.append(.run { [weak self] in
+            self?.handleBotArrival(at: next)
+        })
+        bot.run(.sequence(actions), withKey: "botStep")
     }
 
     private func handleBotArrival(at point: GridPoint) {
@@ -1449,7 +1598,7 @@ final class GameScene: SKScene {
     private func nextBotDirection(at point: GridPoint) -> MoveDirection? {
         let hasKey = keyCount > 0
         let switchActive = switchActivated
-        if let forced = forcedBotDirection(at: point, hasKey: hasKey, switchActive: switchActive, allowClosedGate: true) {
+        if let forced = forcedBotDirection(at: point, hasKey: hasKey, switchActive: switchActive, breakHits: breakHitsVector(), allowClosedGate: true) {
             return forced
         }
 
@@ -1480,7 +1629,7 @@ final class GameScene: SKScene {
             candidates = [.left, .up, .right, .down]
         }
         let legal = candidates.filter { direction in
-            botCanEnter(point.moved(by: direction), hasKey: hasKey, switchActive: switchActive, allowClosedGate: true)
+            botCanAttempt(point.moved(by: direction), hasKey: hasKey, switchActive: switchActive, breakHits: breakHitsVector(), allowClosedGate: true)
         }
         return easyBotLoopTracker.chooseDirection(from: point, facing: facing, candidates: legal)
     }
@@ -1489,7 +1638,8 @@ final class GameScene: SKScene {
         let normalizedState = BotPathState(
             point: point,
             hasKey: hasKey || tileAt(point) == "K",
-            switchActive: switchActive || tileAt(point) == "T"
+            switchActive: switchActive,
+            breakHits: breakHitsVector()
         )
         if let cached = hardBotDirectionCache[normalizedState] {
             return cached
@@ -1506,7 +1656,8 @@ final class GameScene: SKScene {
         let startState = BotPathState(
             point: point,
             hasKey: hasKey || tileAt(point) == "K",
-            switchActive: switchActive || tileAt(point) == "T"
+            switchActive: switchActive,
+            breakHits: breakHitsVector()
         )
         if startState.point == maze.exit {
             return nil
@@ -1516,41 +1667,121 @@ final class GameScene: SKScene {
             from: point,
             hasKey: startState.hasKey,
             switchActive: startState.switchActive,
+            breakHits: startState.breakHits,
             allowClosedGate: true
         )
-        var queue: [(BotPathState, MoveDirection)] = []
+        guard !initialDirections.isEmpty else {
+            return nextEasyBotDirection(at: point, facing: botCurrentDirection, hasKey: hasKey, switchActive: switchActive)
+        }
+        var queue: [(BotPathState, MoveDirection, Int)] = []
         var visited = Set<BotPathState>([startState])
         var index = 0
+        var bestCosts: [MoveDirection: Int] = [:]
 
         for direction in initialDirections {
             guard let nextState = botAdvanceState(from: startState, direction: direction, allowClosedGate: true) else { continue }
             if visited.insert(nextState).inserted {
-                queue.append((nextState, direction))
+                queue.append((nextState, direction, 1))
             }
         }
 
         while index < queue.count {
-            let (state, firstMove) = queue[index]
+            let (state, firstMove, depth) = queue[index]
             index += 1
             if state.point == maze.exit {
-                return firstMove
+                if bestCosts[firstMove] == nil {
+                    bestCosts[firstMove] = depth
+                }
+                if bestCosts.count == initialDirections.count {
+                    break
+                }
+                continue
             }
 
             let directions = availableBotDirections(
                 from: state.point,
                 hasKey: state.hasKey,
                 switchActive: state.switchActive,
+                breakHits: state.breakHits,
                 allowClosedGate: true
             )
             for direction in directions {
                 guard let nextState = botAdvanceState(from: state, direction: direction, allowClosedGate: true) else { continue }
                 if visited.insert(nextState).inserted {
-                    queue.append((nextState, firstMove))
+                    queue.append((nextState, firstMove, depth + 1))
                 }
             }
         }
 
+        if let softened = softenedHardBotChoice(
+            from: point,
+            facing: botCurrentDirection,
+            costs: bestCosts,
+            preferredOrder: initialDirections
+        ) {
+            return softened
+        }
         return nextEasyBotDirection(at: point, facing: botCurrentDirection, hasKey: hasKey, switchActive: switchActive)
+    }
+
+    private func softenedHardBotChoice(
+        from point: GridPoint,
+        facing: MoveDirection?,
+        costs: [MoveDirection: Int],
+        preferredOrder: [MoveDirection]
+    ) -> MoveDirection? {
+        let ordered = preferredOrder.compactMap { direction -> (MoveDirection, Int)? in
+            guard let cost = costs[direction] else { return nil }
+            return (direction, cost)
+        }.sorted {
+            if $0.1 == $1.1 {
+                return directionPriority($0.0, facing: facing) < directionPriority($1.0, facing: facing)
+            }
+            return $0.1 < $1.1
+        }
+
+        guard let best = ordered.first else { return nil }
+        guard ordered.count > 1 else { return best.0 }
+
+        let second = ordered[1]
+        if shouldTakeHardBotDetour(at: point, facing: facing, bestCost: best.1, secondBestCost: second.1) {
+            return second.0
+        }
+        return best.0
+    }
+
+    private func shouldTakeHardBotDetour(
+        at point: GridPoint,
+        facing: MoveDirection?,
+        bestCost: Int,
+        secondBestCost: Int
+    ) -> Bool {
+        guard secondBestCost <= bestCost + 2 else { return false }
+        let facingSeed: Int
+        switch facing {
+        case .up: facingSeed = 1
+        case .down: facingSeed = 2
+        case .left: facingSeed = 3
+        case .right: facingSeed = 4
+        case nil: facingSeed = 0
+        }
+        let seed = point.row * 37 + point.col * 19 + facingSeed * 11
+        return seed % 5 == 0
+    }
+
+    private func directionPriority(_ direction: MoveDirection, facing: MoveDirection?) -> Int {
+        guard let facing else {
+            switch direction {
+            case .up: return 0
+            case .right: return 1
+            case .down: return 2
+            case .left: return 3
+            }
+        }
+        if direction == facing { return 0 }
+        if direction == leftTurn(from: facing) { return 1 }
+        if direction == rightTurn(from: facing) { return 2 }
+        return 3
     }
 
     private func primeHardBotDirectionCache() {
@@ -1564,7 +1795,8 @@ final class GameScene: SKScene {
                         let normalizedState = BotPathState(
                             point: point,
                             hasKey: hasKey || tileAt(point) == "K",
-                            switchActive: switchActive || tileAt(point) == "T"
+                            switchActive: switchActive,
+                            breakHits: breakHitsVector()
                         )
                         guard hardBotDirectionCache[normalizedState] == nil else { continue }
                         guard botCanEnter(point, hasKey: normalizedState.hasKey, switchActive: normalizedState.switchActive, allowClosedGate: true) else { continue }
@@ -1577,40 +1809,65 @@ final class GameScene: SKScene {
         }
     }
 
+    private func invalidateHardBotDirectionCacheForDynamicStateChange() {
+        guard botDifficulty == .hard else { return }
+        hardBotDirectionCache.removeAll(keepingCapacity: true)
+        botCurrentDirection = nil
+    }
+
     private func botAdvanceState(from state: BotPathState, direction: MoveDirection, allowClosedGate: Bool) -> BotPathState? {
         let next = state.point.moved(by: direction)
+        if tileAt(next) == "B",
+           let breakableIndex = orderedBreakablePoints.firstIndex(of: next),
+           state.breakHits[breakableIndex] < 3 {
+            var nextBreakHits = state.breakHits
+            nextBreakHits[breakableIndex] = min(3, nextBreakHits[breakableIndex] + 1)
+            return BotPathState(point: state.point, hasKey: state.hasKey, switchActive: state.switchActive, breakHits: nextBreakHits)
+        }
         guard botCanEnter(next, hasKey: state.hasKey, switchActive: state.switchActive, allowClosedGate: allowClosedGate) else { return nil }
         var destination = next
         var nextHasKey = state.hasKey || tileAt(next) == "K"
-        var nextSwitchActive = state.switchActive || tileAt(next) == "T"
+        var nextSwitchActive = tileAt(next) == "T" ? !state.switchActive : state.switchActive
         if let teleported = teleporterMap[next] {
             destination = teleported
             nextHasKey = nextHasKey || tileAt(teleported) == "K"
-            nextSwitchActive = nextSwitchActive || tileAt(teleported) == "T"
+            nextSwitchActive = tileAt(teleported) == "T" ? !nextSwitchActive : nextSwitchActive
         }
-        return BotPathState(point: destination, hasKey: nextHasKey, switchActive: nextSwitchActive)
+        return BotPathState(point: destination, hasKey: nextHasKey, switchActive: nextSwitchActive, breakHits: state.breakHits)
     }
 
-    private func availableBotDirections(from point: GridPoint, hasKey: Bool, switchActive: Bool, allowClosedGate: Bool) -> [MoveDirection] {
-        if let forced = forcedBotDirection(at: point, hasKey: hasKey, switchActive: switchActive, allowClosedGate: allowClosedGate) {
+    private func availableBotDirections(from point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], allowClosedGate: Bool) -> [MoveDirection] {
+        if let forced = forcedBotDirection(at: point, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, allowClosedGate: allowClosedGate) {
             return [forced]
         }
         return MoveDirection.allCases.filter { direction in
-            botCanEnter(point.moved(by: direction), hasKey: hasKey, switchActive: switchActive, allowClosedGate: allowClosedGate)
+            botCanAttempt(point.moved(by: direction), hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, allowClosedGate: allowClosedGate)
         }
     }
 
-    private func forcedBotDirection(at point: GridPoint, hasKey: Bool, switchActive: Bool, allowClosedGate: Bool) -> MoveDirection? {
+    private func forcedBotDirection(at point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], allowClosedGate: Bool) -> MoveDirection? {
         guard let forced = oneWayDirections[point] else { return nil }
-        return botCanEnter(point.moved(by: forced), hasKey: hasKey, switchActive: switchActive, allowClosedGate: allowClosedGate) ? forced : nil
+        return botCanAttempt(point.moved(by: forced), hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, allowClosedGate: allowClosedGate) ? forced : nil
     }
 
     private func botCanEnter(_ point: GridPoint, hasKey: Bool, switchActive: Bool, allowClosedGate: Bool) -> Bool {
         guard let tile = tileAt(point) else { return false }
         if tile == "#" { return false }
-        if tile == "D", !(hasKey || switchActive) { return false }
+        if movingBlockOccupiedTiles.contains(point) { return false }
+        if tile == "E", exitRequiresKey, !hasKey { return false }
+        if tile == "X", !switchActive { return false }
+        if tile == "B", !isBreakableDestroyed(at: point) { return false }
         if tile == "G", !allowClosedGate, !gateIsOpen { return false }
         return true
+    }
+
+    private func botCanAttempt(_ point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], allowClosedGate: Bool) -> Bool {
+        if tileAt(point) == "B",
+           let breakableIndex = orderedBreakablePoints.firstIndex(of: point),
+           breakHits[breakableIndex] < 3 {
+            return true
+        }
+        return botCanEnter(point, hasKey: hasKey, switchActive: switchActive, allowClosedGate: allowClosedGate)
     }
 
     private func leftTurn(from direction: MoveDirection) -> MoveDirection {
@@ -1643,27 +1900,45 @@ final class GameScene: SKScene {
     private func configureMechanics(for maze: MazeData) {
         oneWayDirections.removeAll()
         teleporterMap.removeAll()
+        routeHintNode?.removeAllActions()
+        routeHintNode?.removeFromParent()
+        timeBonusNodes.values.forEach { $0.removeFromParent() }
+        keyFollowerNode?.removeFromParent()
         keyNodes.values.forEach { $0.removeFromParent() }
         switchNodes.values.forEach { $0.removeFromParent() }
-        doorNodes.values.forEach { $0.removeFromParent() }
+        switchBlockNodes.values.forEach { $0.removeFromParent() }
+        breakableNodes.values.forEach { $0.removeFromParent() }
         gateNodes.values.forEach { $0.removeFromParent() }
         teleporterNodes.values.forEach { $0.removeFromParent() }
+        movingBlockNodes.values.forEach { $0.removeFromParent() }
         keyNodes.removeAll()
+        keyFollowerNode = nil
+        routeHintNode = nil
+        timeBonusNodes.removeAll()
         switchNodes.removeAll()
-        doorNodes.removeAll()
+        switchBlockNodes.removeAll()
+        orderedSwitchBlockPoints.removeAll()
+        orderedSwitchBlockPoints.removeAll()
+        breakableNodes.removeAll()
         gateNodes.removeAll()
         gateTiles.removeAll()
         teleporterNodes.removeAll()
+        movingBlockTracks.removeAll()
+        movingBlockNodes.removeAll()
+        movingBlockOccupiedTiles.removeAll()
         forcedDirection = nil
         keyCount = 0
         switchActivated = false
+        breakableHits.removeAll()
+        orderedBreakablePoints.removeAll()
         gateIsOpen = true
 
         var teleporterBuckets: [Character: [GridPoint]] = [:]
-        let keyTexture = TextureFactory.shared.orbTexture(size: snapSize(CGSize(width: tileSize * 0.34, height: tileSize * 0.34)))
         let switchTexture = TextureFactory.shared.tileTexture(size: snapSize(CGSize(width: tileSize * 0.7, height: tileSize * 0.7)), style: .floor)
-        let doorTexture = TextureFactory.shared.tileTexture(size: snapSize(CGSize(width: tileSize * 0.86, height: tileSize * 0.86)), style: .wall)
+        let breakableTexture = TextureFactory.shared.tileTexture(size: snapSize(CGSize(width: tileSize * 0.82, height: tileSize * 0.82)), style: .wall)
+        let switchBlockTexture = TextureFactory.shared.tileTexture(size: snapSize(CGSize(width: tileSize * 0.82, height: tileSize * 0.82)), style: .wall)
         let gateTexture = TextureFactory.shared.tileTexture(size: snapSize(CGSize(width: tileSize * 0.86, height: tileSize * 0.86)), style: .floor)
+        let movingBlockTexture = TextureFactory.shared.tileTexture(size: snapSize(CGSize(width: tileSize * 0.8, height: tileSize * 0.8)), style: .wall)
         let teleporterSkin = CosmeticsStore.shared.selectedTeleporterSkin
 
         for row in 0..<maze.rows {
@@ -1683,44 +1958,32 @@ final class GameScene: SKScene {
                         worldNode.addChild(arrow)
                     }
                 case "K":
-                    let key = SKSpriteNode(texture: keyTexture)
+                    let key = makeKeyPickupNode()
                     key.position = positionFor(point)
                     key.zPosition = 11
-                    key.color = ArcadeStyle.Color.accentYellow
-                    key.colorBlendFactor = 0.4
                     worldNode.addChild(key)
                     keyNodes[point] = key
                 case "T":
-                    let trigger = SKNode()
+                    let trigger = makeSwitchTriggerNode(texture: switchTexture)
                     trigger.position = positionFor(point)
                     trigger.zPosition = 11
-
-                    let plate = SKSpriteNode(texture: switchTexture)
-                    plate.color = ArcadeStyle.Color.accentMagenta
-                    plate.colorBlendFactor = 0.5
-                    plate.zPosition = 0
-                    trigger.addChild(plate)
-
-                    let glyph = SKLabelNode(fontNamed: ArcadeFont.body)
-                    glyph.text = "SW"
-                    glyph.fontSize = max(8, tileSize * 0.18)
-                    glyph.fontColor = ArcadeStyle.Color.textPrimary
-                    glyph.verticalAlignmentMode = .center
-                    glyph.horizontalAlignmentMode = .center
-                    glyph.position = snap(.zero)
-                    glyph.zPosition = 1
-                    trigger.addChild(glyph)
-
                     worldNode.addChild(trigger)
                     switchNodes[point] = trigger
-                case "D":
-                    let door = SKSpriteNode(texture: doorTexture)
-                    door.position = positionFor(point)
-                    door.zPosition = 9
-                    door.color = SKColor(red: 1.0, green: 0.35, blue: 0.35, alpha: 1.0)
-                    door.colorBlendFactor = 0.45
-                    worldNode.addChild(door)
-                    doorNodes[point] = door
+                case "X":
+                    let block = makeSwitchBlockNode(texture: switchBlockTexture)
+                    block.position = positionFor(point)
+                    block.zPosition = 9
+                    worldNode.addChild(block)
+                    switchBlockNodes[point] = block
+                    orderedSwitchBlockPoints.append(point)
+                case "B":
+                    let breakable = makeBreakableBlockNode(texture: breakableTexture)
+                    breakable.position = positionFor(point)
+                    breakable.zPosition = 9
+                    worldNode.addChild(breakable)
+                    breakableNodes[point] = breakable
+                    breakableHits[point] = 0
+                    orderedBreakablePoints.append(point)
                 case "G":
                     let gate = SKSpriteNode(texture: gateTexture)
                     gate.position = positionFor(point)
@@ -1732,12 +1995,16 @@ final class GameScene: SKScene {
                 default:
                     if tile.isLetter {
                         let upper = Character(String(tile).uppercased())
-                        if !["S", "E", "O", "K", "T", "D", "G"].contains(upper) {
+                        if !["S", "E", "O", "K", "T", "D", "G", "B", "X"].contains(upper) {
                             teleporterBuckets[upper, default: []].append(point)
                         }
                     }
                 }
             }
+        }
+
+        orderedBreakablePoints.sort {
+            ($0.row, $0.col) < ($1.row, $1.col)
         }
 
         let colors: [SKColor] = [
@@ -1772,8 +2039,22 @@ final class GameScene: SKScene {
             }
         }
 
+        for (index, movingBlock) in maze.movingBlocks.enumerated() {
+            let track = movingBlockTrack(for: movingBlock)
+            guard let first = track.first else { continue }
+            let node = makeMovingBlockNode(texture: movingBlockTexture, track: track)
+            node.position = positionFor(first)
+            node.zPosition = 10
+            worldNode.addChild(node)
+            movingBlockTracks[index] = track
+            movingBlockNodes[index] = node
+        }
+
         updateGateVisuals()
-        updateDoorVisuals()
+        updateExitLockVisuals(animated: false)
+        updateSwitchTriggerVisuals(animated: false)
+        updateSwitchBlockVisuals(animated: false)
+        updateAllBreakableVisuals(animated: false)
     }
 
     private func setupFog() {
@@ -2000,28 +2281,1719 @@ final class GameScene: SKScene {
         }
     }
 
-    private func updateDoorVisuals() {
-        let unlocked = doorsAreUnlocked
-        let color = unlocked ? SKColor(red: 0.4, green: 1.0, blue: 0.6, alpha: 1.0) : SKColor(red: 1.0, green: 0.35, blue: 0.35, alpha: 1.0)
-        for node in doorNodes.values {
-            node.color = color
+    private func updateExitLockVisuals(animated: Bool) {
+        guard exitRequiresKey else {
+            exitMarkerNode?.colorBlendFactor = 0
+            exitGlowNode?.strokeColor = currentTheme.palette.accentPink
+            exitGlowNode?.fillColor = currentTheme.palette.accentPink.withAlphaComponent(0.18)
+            exitGlowNode?.alpha = 0.58
+            configureExitGlowIdle(unlocked: true)
+            exitLockNode?.alpha = 0
+            return
+        }
+
+        let unlocked = exitIsUnlocked
+        let unlockedGlowColor = mixedColor(currentTheme.palette.accentCyan, ArcadeStyle.Color.accentGreen, ratio: 0.42)
+        let lockedGlowColor = currentTheme.palette.cardBorder
+        let markerColor = unlocked
+            ? currentTheme.palette.accentCyan
+            : currentTheme.palette.cardBottom
+        let glowColor = unlocked
+            ? unlockedGlowColor
+            : lockedGlowColor
+        let glowAlpha: CGFloat = unlocked ? 0.84 : 0.11
+        let markerBlend: CGFloat = unlocked ? 0.22 : 0.08
+        let markerAlpha: CGFloat = unlocked ? 1.0 : 0.78
+
+        if animated {
+            exitMarkerNode?.run(.sequence([
+                .scale(to: 1.07, duration: 0.12),
+                .scale(to: 1.0, duration: 0.16)
+            ]), withKey: "exitPulse")
+            exitGlowNode?.run(.sequence([
+                .group([
+                    .fadeAlpha(to: min(1.0, glowAlpha + 0.14), duration: 0.12),
+                    .scale(to: 1.12, duration: 0.12)
+                ]),
+                .group([
+                    .fadeAlpha(to: glowAlpha, duration: 0.18),
+                    .scale(to: 1.0, duration: 0.18)
+                ])
+            ]), withKey: "exitGlowPulse")
+            spawnExitActivationWave(unlocked: unlocked)
+        }
+
+        exitMarkerNode?.color = markerColor
+        exitMarkerNode?.colorBlendFactor = markerBlend
+        exitMarkerNode?.alpha = markerAlpha
+        exitGlowNode?.strokeColor = glowColor
+        exitGlowNode?.fillColor = glowColor.withAlphaComponent(unlocked ? 0.18 : 0.0)
+        exitGlowNode?.alpha = glowAlpha
+        configureExitGlowIdle(unlocked: unlocked)
+
+        if let lockNode = exitLockNode {
+            lockNode.childNode(withName: "closed_icon")?.alpha = unlocked ? 0.0 : 1.0
+            lockNode.childNode(withName: "open_icon")?.alpha = unlocked ? 1.0 : 0.0
+            configureExitLockIdle(lockNode, unlocked: unlocked)
+            if animated {
+                if unlocked {
+                    playExitUnlockSequence(for: lockNode)
+                } else {
+                    lockNode.removeAction(forKey: "lockState")
+                    lockNode.run(.group([
+                        .fadeAlpha(to: 1.0, duration: 0.14),
+                        .scale(to: 1.0, duration: 0.14)
+                    ]), withKey: "lockState")
+                }
+            } else {
+                lockNode.alpha = 1.0
+                lockNode.setScale(1.0)
+            }
         }
     }
 
-    private func activateSwitchIfNeeded(at point: GridPoint) {
-        guard !switchActivated, switchNodes[point] != nil else { return }
-        switchActivated = true
-        SoundFX.playUnlock(on: self)
+    private func configureExitGlowIdle(unlocked: Bool) {
+        guard let exitGlowNode else { return }
+        exitGlowNode.removeAction(forKey: "exitGlowIdle")
+        let lowAlpha: CGFloat = unlocked ? 0.52 : 0.08
+        let highAlpha: CGFloat = unlocked ? 0.82 : 0.18
+        let lowScale: CGFloat = 1.0
+        let highScale: CGFloat = unlocked ? 1.08 : 1.03
+        exitGlowNode.run(.repeatForever(.sequence([
+            .group([
+                .fadeAlpha(to: highAlpha, duration: unlocked ? 0.4 : 0.62),
+                .scale(to: highScale, duration: unlocked ? 0.4 : 0.62)
+            ]),
+            .group([
+                .fadeAlpha(to: lowAlpha, duration: unlocked ? 0.4 : 0.75),
+                .scale(to: lowScale, duration: unlocked ? 0.4 : 0.75)
+            ])
+        ])), withKey: "exitGlowIdle")
+    }
+
+    private func configureExitLockIdle(_ lockNode: SKNode, unlocked: Bool) {
+        lockNode.removeAction(forKey: "lockIdle")
+        let lowAlpha: CGFloat = unlocked ? 0.94 : 0.9
+        let highAlpha: CGFloat = 1.0
+        let highScale: CGFloat = unlocked ? 1.03 : 1.04
+        lockNode.run(.repeatForever(.sequence([
+            .group([
+                timed(.fadeAlpha(to: highAlpha, duration: unlocked ? 0.44 : 0.58), mode: .easeInEaseOut),
+                timed(.scale(to: highScale, duration: unlocked ? 0.44 : 0.58), mode: .easeInEaseOut)
+            ]),
+            .group([
+                timed(.fadeAlpha(to: lowAlpha, duration: unlocked ? 0.6 : 0.75), mode: .easeInEaseOut),
+                timed(.scale(to: 1.0, duration: unlocked ? 0.6 : 0.75), mode: .easeInEaseOut)
+            ])
+        ])), withKey: "lockIdle")
+    }
+
+    private func pulseLockedExit() {
+        SoundFX.playBlocked(on: self)
+        let basePosition = exitMarkerNode?.position ?? .zero
+        let denyColor = currentTheme.palette.cardBorder
+        exitLockNode?.run(.sequence([
+            .group([
+                .fadeAlpha(to: 1.0, duration: 0.08),
+                .scale(to: 1.08, duration: 0.08)
+            ]),
+            .moveBy(x: -3, y: 0, duration: 0.03),
+            .moveBy(x: 6, y: 0, duration: 0.05),
+            .moveBy(x: -3, y: 0, duration: 0.04),
+            .group([
+                .fadeAlpha(to: 1.0, duration: 0.14),
+                .scale(to: 1.0, duration: 0.14)
+            ])
+        ]), withKey: "lockedExitBounce")
+        exitGlowNode?.run(.sequence([
+            .group([
+                .fadeAlpha(to: 0.26, duration: 0.08),
+                .scale(to: 1.025, duration: 0.08)
+            ]),
+            .group([
+                .fadeAlpha(to: 0.11, duration: 0.18),
+                .scale(to: 1.0, duration: 0.18)
+            ])
+        ]), withKey: "lockedExitGlow")
+        exitGlowNode?.strokeColor = denyColor
+        exitMarkerNode?.run(.sequence([
+            .group([
+                .fadeAlpha(to: 0.54, duration: 0.08),
+                .moveBy(x: 2, y: 0, duration: 0.04)
+            ]),
+            .group([
+                .fadeAlpha(to: 0.62, duration: 0.16),
+                .move(to: basePosition, duration: 0.12)
+            ])
+        ]), withKey: "lockedExitMarkerDim")
+        spawnLockedExitDenyRipple()
+    }
+
+    private func spawnLockedExitDenyRipple() {
+        guard let exitMarkerNode else { return }
+        let ripple = SKShapeNode(circleOfRadius: tileSize * 0.16)
+        ripple.position = exitMarkerNode.position
+        ripple.strokeColor = currentTheme.palette.cardBorder.withAlphaComponent(0.92)
+        ripple.lineWidth = 2.3
+        ripple.glowWidth = 6
+        ripple.fillColor = currentTheme.palette.cardBorder.withAlphaComponent(0.08)
+        ripple.zPosition = 7
+        worldNode.addChild(ripple)
+        ripple.run(.sequence([
+            .group([
+                timed(.scale(to: 1.82, duration: 0.18), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.18), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func playExitUnlockSequence(for lockNode: SKNode) {
+        lockNode.removeAction(forKey: "lockState")
+        let closedIcon = lockNode.childNode(withName: "closed_icon")
+        let openIcon = lockNode.childNode(withName: "open_icon")
+        lockNode.run(.sequence([
+            .group([
+                timed(.scale(to: 1.08, duration: 0.08), mode: .easeOut),
+                timed(.fadeAlpha(to: 1.0, duration: 0.08), mode: .easeOut)
+            ]),
+            .group([
+                timed(.scale(to: 0.94, duration: 0.18), mode: .easeInEaseOut),
+                timed(.fadeAlpha(to: 1.0, duration: 0.18), mode: .easeInEaseOut)
+            ])
+        ]), withKey: "lockState")
+
+        closedIcon?.run(.sequence([
+            .group([
+                timed(.fadeOut(withDuration: 0.16), mode: .easeInEaseOut),
+                timed(.scale(to: 0.72, duration: 0.16), mode: .easeInEaseOut),
+                timed(.moveBy(x: 0, y: tileSize * 0.05, duration: 0.16), mode: .easeInEaseOut)
+            ])
+        ]), withKey: "unlockClosedIcon")
+
+        openIcon?.alpha = 0
+        openIcon?.setScale(0.72)
+        openIcon?.run(.sequence([
+            .wait(forDuration: 0.05),
+            .group([
+                timed(.fadeAlpha(to: 1.0, duration: 0.18), mode: .easeOut),
+                timed(.scale(to: 1.0, duration: 0.18), mode: .easeOut),
+                timed(.moveBy(x: tileSize * 0.01, y: tileSize * 0.015, duration: 0.18), mode: .easeOut)
+            ])
+        ]), withKey: "unlockOpenIcon")
+
+        if let flare = lockNode.childNode(withName: "lock_flare") as? SKShapeNode {
+            flare.alpha = 0.0
+            flare.run(.sequence([
+                .group([
+                    timed(.fadeAlpha(to: 0.34, duration: 0.08), mode: .easeOut),
+                    timed(.scale(to: 1.18, duration: 0.08), mode: .easeOut)
+                ]),
+                .group([
+                    timed(.fadeOut(withDuration: 0.2), mode: .easeInEaseOut),
+                    timed(.scale(to: 0.92, duration: 0.2), mode: .easeInEaseOut)
+                ])
+            ]), withKey: "unlockFlare")
+        }
+    }
+
+    private func makeExitLockNode() -> SKNode {
+        let container = SKNode()
+        let closedTint = currentTheme.palette.cardBorder
+        let openTint = SKColor(white: 0.98, alpha: 1.0)
+
+        let shadowPlate = SKShapeNode(ellipseOf: snapSize(CGSize(width: tileSize * 0.36, height: tileSize * 0.12)))
+        shadowPlate.fillColor = SKColor(white: 0.0, alpha: 0.28)
+        shadowPlate.strokeColor = .clear
+        shadowPlate.position = snap(CGPoint(x: 0, y: -tileSize * 0.17))
+        shadowPlate.zPosition = -1
+        container.addChild(shadowPlate)
+
+        let flare = SKShapeNode(circleOfRadius: tileSize * 0.16)
+        flare.name = "lock_flare"
+        flare.fillColor = SKColor(white: 1.0, alpha: 0.08)
+        flare.strokeColor = .clear
+        flare.alpha = 0.14
+        flare.glowWidth = 2.6
+        flare.position = snap(CGPoint(x: 0, y: -tileSize * 0.01))
+        flare.zPosition = 0.2
+        container.addChild(flare)
+
+        let iconSize = snapSize(CGSize(width: tileSize * 0.34, height: tileSize * 0.34))
+
+        let closedIcon = SKSpriteNode(texture: tintedTexture(from: exitLockOpenIconTexture, assetName: "ExitLockOpen", color: closedTint))
+        closedIcon.name = "closed_icon"
+        closedIcon.size = iconSize
+        closedIcon.position = snap(CGPoint(x: 0, y: -tileSize * 0.01))
+        closedIcon.zRotation = .pi
+        closedIcon.zPosition = 1
+        container.addChild(closedIcon)
+
+        let openIcon = SKSpriteNode(texture: tintedTexture(from: exitLockClosedIconTexture, assetName: "ExitLockClosed", color: openTint))
+        openIcon.name = "open_icon"
+        openIcon.size = iconSize
+        openIcon.position = snap(CGPoint(x: tileSize * 0.01, y: tileSize * 0.005))
+        openIcon.zRotation = .pi
+        openIcon.alpha = 0.0
+        openIcon.zPosition = 1
+        container.addChild(openIcon)
+
+        return container
+    }
+
+    private func makeKeyPickupNode() -> SKNode {
+        let container = SKNode()
+        let keyTint = SKColor(red: 1.0, green: 0.81, blue: 0.18, alpha: 1.0)
+        let keyHighlightTint = SKColor(red: 1.0, green: 0.93, blue: 0.52, alpha: 1.0)
+
+        let glow = SKShapeNode(circleOfRadius: tileSize * 0.13)
+        glow.fillColor = keyTint.withAlphaComponent(0.07)
+        glow.strokeColor = keyHighlightTint.withAlphaComponent(0.22)
+        glow.lineWidth = 1.1
+        glow.glowWidth = 2.8
+        glow.zPosition = 0
+        container.addChild(glow)
+
+        let plate = SKShapeNode(circleOfRadius: tileSize * 0.17)
+        plate.fillColor = SKColor(red: 0.055, green: 0.045, blue: 0.03, alpha: 0.9)
+        plate.strokeColor = keyTint.withAlphaComponent(0.34)
+        plate.lineWidth = 1.2
+        plate.position = snap(CGPoint(x: 0, y: -tileSize * 0.005))
+        plate.zPosition = 0.4
+        container.addChild(plate)
+
+        let keyBackShadow = SKSpriteNode(texture: tintedTexture(from: gameplayKeyIconTexture, assetName: "GameplayKeyIcon", color: SKColor(white: 0.0, alpha: 1.0)))
+        keyBackShadow.size = snapSize(CGSize(width: tileSize * 0.42, height: tileSize * 0.42))
+        keyBackShadow.position = snap(CGPoint(x: tileSize * 0.02, y: -tileSize * 0.015))
+        keyBackShadow.alpha = 0.34
+        keyBackShadow.zRotation = -.pi / 18
+        keyBackShadow.zPosition = 0.72
+        container.addChild(keyBackShadow)
+
+        let keyShadow = SKSpriteNode(texture: tintedTexture(from: gameplayKeyIconTexture, assetName: "GameplayKeyIcon", color: SKColor(white: 0.06, alpha: 1.0)))
+        keyShadow.size = snapSize(CGSize(width: tileSize * 0.42, height: tileSize * 0.42))
+        keyShadow.position = snap(CGPoint(x: tileSize * 0.012, y: -tileSize * 0.012))
+        keyShadow.alpha = 0.5
+        keyShadow.zRotation = -.pi / 18
+        keyShadow.zPosition = 0.8
+        container.addChild(keyShadow)
+
+        let key = SKSpriteNode(texture: tintedTexture(from: gameplayKeyIconTexture, assetName: "GameplayKeyIcon", color: keyTint))
+        key.name = "key_icon"
+        key.size = snapSize(CGSize(width: tileSize * 0.42, height: tileSize * 0.42))
+        key.position = snap(CGPoint(x: 0, y: 0))
+        key.zRotation = -.pi / 18
+        key.zPosition = 1
+        container.addChild(key)
+
+        let keyHighlight = SKSpriteNode(texture: tintedTexture(from: gameplayKeyIconTexture, assetName: "GameplayKeyIcon", color: keyHighlightTint))
+        keyHighlight.size = snapSize(CGSize(width: tileSize * 0.42, height: tileSize * 0.42))
+        keyHighlight.position = snap(CGPoint(x: -tileSize * 0.008, y: tileSize * 0.01))
+        keyHighlight.alpha = 0.22
+        keyHighlight.zRotation = -.pi / 18
+        keyHighlight.blendMode = .add
+        keyHighlight.zPosition = 1.1
+        container.addChild(keyHighlight)
+
+        let floatUp = SKAction.moveBy(x: 0, y: tileSize * 0.04, duration: 0.7)
+        floatUp.timingMode = .easeInEaseOut
+        let floatDown = SKAction.moveBy(x: 0, y: -tileSize * 0.04, duration: 0.7)
+        floatDown.timingMode = .easeInEaseOut
+        container.run(.repeatForever(.sequence([floatUp, floatDown])), withKey: "keyFloat")
+
+        let pulseUp = SKAction.fadeAlpha(to: 0.24, duration: 0.7)
+        pulseUp.timingMode = .easeInEaseOut
+        let pulseDown = SKAction.fadeAlpha(to: 0.09, duration: 0.7)
+        pulseDown.timingMode = .easeInEaseOut
+        glow.alpha = 0.11
+        glow.run(.repeatForever(.sequence([pulseUp, pulseDown])), withKey: "keyGlow")
+
+        keyHighlight.run(.repeatForever(.sequence([
+            timed(.fadeAlpha(to: 0.34, duration: 0.72), mode: .easeInEaseOut),
+            timed(.fadeAlpha(to: 0.18, duration: 0.72), mode: .easeInEaseOut)
+        ])), withKey: "keyHighlight")
+
+        return container
+    }
+
+    private func makeTimeBonusPickupNode() -> SKNode {
+        let container = SKNode()
+        let ringTint = ArcadeStyle.Color.accentYellow
+        let fillTint = SKColor(red: 1.0, green: 0.95, blue: 0.68, alpha: 1.0)
+        let accentTint = SKColor(red: 0.55, green: 0.94, blue: 1.0, alpha: 1.0)
+        let warmCoreTint = SKColor(red: 1.0, green: 0.84, blue: 0.28, alpha: 1.0)
+
+        let glow = SKShapeNode(circleOfRadius: tileSize * 0.22)
+        glow.fillColor = ringTint.withAlphaComponent(0.11)
+        glow.strokeColor = accentTint.withAlphaComponent(0.3)
+        glow.lineWidth = 1.4
+        glow.glowWidth = 5.2
+        glow.zPosition = 0
+        container.addChild(glow)
+
+        let halo = SKShapeNode(circleOfRadius: tileSize * 0.27)
+        halo.fillColor = .clear
+        halo.strokeColor = ringTint.withAlphaComponent(0.18)
+        halo.lineWidth = 1.2
+        halo.glowWidth = 4.6
+        halo.zPosition = 0.15
+        container.addChild(halo)
+
+        let plate = SKShapeNode(circleOfRadius: tileSize * 0.245)
+        plate.fillColor = SKColor(red: 0.05, green: 0.075, blue: 0.14, alpha: 0.96)
+        plate.strokeColor = ringTint.withAlphaComponent(0.44)
+        plate.lineWidth = 1.5
+        plate.zPosition = 0.4
+        container.addChild(plate)
+
+        let innerDisc = SKShapeNode(circleOfRadius: tileSize * 0.165)
+        innerDisc.fillColor = SKColor(red: 0.11, green: 0.14, blue: 0.22, alpha: 0.94)
+        innerDisc.strokeColor = warmCoreTint.withAlphaComponent(0.24)
+        innerDisc.lineWidth = 1.0
+        innerDisc.zPosition = 0.55
+        container.addChild(innerDisc)
+
+        let iconShadow = SKSpriteNode(texture: tintedTexture(from: gameplayTimeBonusIconTexture, assetName: "GameplayTimeBonusIcon", color: SKColor(white: 0.0, alpha: 1.0)))
+        iconShadow.size = snapSize(CGSize(width: tileSize * 0.62, height: tileSize * 0.62))
+        iconShadow.position = snap(CGPoint(x: tileSize * 0.018, y: -tileSize * 0.016))
+        iconShadow.alpha = 0.32
+        iconShadow.zPosition = 0.8
+        container.addChild(iconShadow)
+
+        let iconBackGlow = SKSpriteNode(texture: tintedTexture(from: gameplayTimeBonusIconTexture, assetName: "GameplayTimeBonusIcon", color: warmCoreTint))
+        iconBackGlow.size = snapSize(CGSize(width: tileSize * 0.66, height: tileSize * 0.66))
+        iconBackGlow.alpha = 0.22
+        iconBackGlow.blendMode = .add
+        iconBackGlow.zPosition = 0.92
+        container.addChild(iconBackGlow)
+
+        let icon = SKSpriteNode(texture: tintedTexture(from: gameplayTimeBonusIconTexture, assetName: "GameplayTimeBonusIcon", color: fillTint))
+        icon.name = "time_bonus_icon"
+        icon.size = snapSize(CGSize(width: tileSize * 0.62, height: tileSize * 0.62))
+        icon.zPosition = 1
+        container.addChild(icon)
+
+        let iconAccent = SKSpriteNode(texture: tintedTexture(from: gameplayTimeBonusIconTexture, assetName: "GameplayTimeBonusIcon", color: accentTint))
+        iconAccent.size = snapSize(CGSize(width: tileSize * 0.62, height: tileSize * 0.62))
+        iconAccent.position = snap(CGPoint(x: -tileSize * 0.01, y: tileSize * 0.01))
+        iconAccent.alpha = 0.16
+        iconAccent.blendMode = .add
+        iconAccent.zPosition = 1.1
+        container.addChild(iconAccent)
+
+        let iconHighlight = SKSpriteNode(texture: tintedTexture(from: gameplayTimeBonusIconTexture, assetName: "GameplayTimeBonusIcon", color: .white))
+        iconHighlight.size = snapSize(CGSize(width: tileSize * 0.62, height: tileSize * 0.62))
+        iconHighlight.position = snap(CGPoint(x: -tileSize * 0.015, y: tileSize * 0.02))
+        iconHighlight.alpha = 0.12
+        iconHighlight.blendMode = .add
+        iconHighlight.zPosition = 1.18
+        container.addChild(iconHighlight)
+
+        plate.run(.repeatForever(.sequence([
+            timed(.scale(to: 1.06, duration: 0.72), mode: .easeInEaseOut),
+            timed(.scale(to: 1.0, duration: 0.72), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusPlatePulse")
+
+        container.run(.repeatForever(.sequence([
+            timed(.moveBy(x: 0, y: tileSize * 0.055, duration: 0.62), mode: .easeInEaseOut),
+            timed(.moveBy(x: 0, y: -tileSize * 0.055, duration: 0.62), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusFloat")
+
+        glow.alpha = 0.14
+        glow.run(.repeatForever(.sequence([
+            timed(.fadeAlpha(to: 0.34, duration: 0.62), mode: .easeInEaseOut),
+            timed(.fadeAlpha(to: 0.12, duration: 0.62), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusGlow")
+
+        halo.alpha = 0.24
+        halo.run(.repeatForever(.sequence([
+            timed(.scale(to: 1.08, duration: 0.74), mode: .easeInEaseOut),
+            timed(.scale(to: 0.98, duration: 0.74), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusHaloPulse")
+        halo.run(.repeatForever(timed(.rotate(byAngle: -.pi * 2, duration: 5.8), mode: .linear)), withKey: "timeBonusHaloSpin")
+
+        icon.run(.repeatForever(.sequence([
+            timed(.scale(to: 1.04, duration: 0.48), mode: .easeOut),
+            timed(.scale(to: 1.0, duration: 0.54), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusIconPulse")
+        iconAccent.run(.repeatForever(.sequence([
+            timed(.fadeAlpha(to: 0.26, duration: 0.48), mode: .easeOut),
+            timed(.fadeAlpha(to: 0.12, duration: 0.62), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusAccentPulse")
+        iconHighlight.run(.repeatForever(.sequence([
+            timed(.fadeAlpha(to: 0.22, duration: 0.42), mode: .easeOut),
+            timed(.fadeAlpha(to: 0.08, duration: 0.64), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusHighlightPulse")
+        iconBackGlow.run(.repeatForever(.sequence([
+            timed(.fadeAlpha(to: 0.34, duration: 0.52), mode: .easeOut),
+            timed(.fadeAlpha(to: 0.18, duration: 0.66), mode: .easeInEaseOut)
+        ])), withKey: "timeBonusCoreGlow")
+
+        return container
+    }
+
+    private func attachCollectedKeyFollower(from keyNode: SKNode) {
+        keyFollowerNode?.removeFromParent()
+        keyFollowerNode = keyNode
+        keyNode.removeAction(forKey: "keyFloat")
+        keyNode.setScale(0.82)
+        keyNode.zPosition = 19
+        if keyNode.parent == nil {
+            worldNode.addChild(keyNode)
+        }
+
+        let settle = SKAction.sequence([
+            .scale(to: 0.94, duration: 0.08),
+            .scale(to: 0.82, duration: 0.12)
+        ])
+        keyNode.run(settle, withKey: "keyFollowSettle")
+        updateCollectedKeyFollower(forceSnap: true)
+    }
+
+    private func updateCollectedKeyFollower(forceSnap: Bool = false) {
+        guard let player = playerNode, let keyFollowerNode else { return }
+
+        let facing = currentDirection ?? forcedDirection ?? .right
+        let hoverPhase = CGFloat(CACurrentMediaTime() * 4.6)
+        let hoverYOffset = sin(hoverPhase) * tileSize * 0.04
+        let targetOffset: CGPoint
+        switch facing {
+        case .up:
+            targetOffset = CGPoint(x: tileSize * 0.16, y: -tileSize * 0.34 + hoverYOffset)
+        case .down:
+            targetOffset = CGPoint(x: -tileSize * 0.16, y: tileSize * 0.34 + hoverYOffset)
+        case .left:
+            targetOffset = CGPoint(x: tileSize * 0.34, y: tileSize * 0.12 + hoverYOffset)
+        case .right:
+            targetOffset = CGPoint(x: -tileSize * 0.34, y: tileSize * 0.12 + hoverYOffset)
+        }
+
+        let target = CGPoint(x: player.position.x + targetOffset.x, y: player.position.y + targetOffset.y)
+        if forceSnap {
+            keyFollowerNode.position = snap(target)
+            return
+        }
+
+        let current = keyFollowerNode.position
+        let lerp: CGFloat = 0.22
+        let next = CGPoint(
+            x: current.x + (target.x - current.x) * lerp,
+            y: current.y + (target.y - current.y) * lerp
+        )
+        keyFollowerNode.position = snap(next)
+        keyFollowerNode.zRotation = sin(hoverPhase * 0.5) * 0.08
+    }
+
+    private func makeBreakableBlockNode(texture: SKTexture) -> SKNode {
+        let container = SKNode()
+
+        let shadow = makeGroundShadow(size: CGSize(width: tileSize * 0.42, height: tileSize * 0.16), alpha: 0.22)
+        shadow.position = CGPoint(x: 0, y: -tileSize * 0.18)
+        shadow.zPosition = -2
+        container.addChild(shadow)
+
+        let halo = makeGlowHalo(radius: tileSize * 0.18, color: ArcadeStyle.Color.accentYellow, alpha: 0.16, glowWidth: 7)
+        halo.name = "halo"
+        halo.zPosition = -1
+        container.addChild(halo)
+
+        let base = SKSpriteNode(texture: texture)
+        base.name = "base"
+        base.color = ArcadeStyle.Color.accentYellow
+        base.colorBlendFactor = 0.42
+        base.zPosition = 0
+        container.addChild(base)
+
+        let panel = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.62, height: tileSize * 0.62)), cornerRadius: 7)
+        panel.name = "panel"
+        panel.fillColor = SKColor(red: 0.22, green: 0.16, blue: 0.08, alpha: 0.92)
+        panel.strokeColor = SKColor(red: 1.0, green: 0.82, blue: 0.38, alpha: 0.3)
+        panel.lineWidth = 1.0
+        panel.zPosition = 0.5
+        container.addChild(panel)
+
+        let frame = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.8, height: tileSize * 0.8)), cornerRadius: 8)
+        frame.name = "frame"
+        frame.strokeColor = ArcadeStyle.Color.accentYellow.withAlphaComponent(0.95)
+        frame.lineWidth = 1.8
+        frame.glowWidth = 3
+        frame.fillColor = .clear
+        frame.zPosition = 1
+        container.addChild(frame)
+
+        for index in [-1, 1] {
+            let brace = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.12, height: tileSize * 0.5)), cornerRadius: 3)
+            brace.name = "brace_\(index == -1 ? "left" : "right")"
+            brace.fillColor = SKColor(white: 0.08, alpha: 0.34)
+            brace.strokeColor = .clear
+            brace.position = snap(CGPoint(x: CGFloat(index) * tileSize * 0.18, y: 0))
+            brace.zPosition = 1.2
+            container.addChild(brace)
+        }
+
+        for index in 0..<3 {
+            let pip = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.14, height: tileSize * 0.06)), cornerRadius: 2)
+            pip.name = "hp_\(index)"
+            pip.fillColor = ArcadeStyle.Color.accentYellow
+            pip.strokeColor = .clear
+            pip.position = snap(CGPoint(x: CGFloat(index - 1) * tileSize * 0.16, y: -tileSize * 0.22))
+            pip.zPosition = 2
+            container.addChild(pip)
+        }
+
+        let crackPathA = CGMutablePath()
+        crackPathA.move(to: CGPoint(x: -tileSize * 0.18, y: tileSize * 0.16))
+        crackPathA.addLine(to: CGPoint(x: 0, y: 0))
+        let crackPathB = CGMutablePath()
+        crackPathB.move(to: CGPoint(x: tileSize * 0.16, y: tileSize * 0.12))
+        crackPathB.addLine(to: CGPoint(x: -tileSize * 0.04, y: -tileSize * 0.06))
+        let crackPathC = CGMutablePath()
+        crackPathC.move(to: CGPoint(x: -tileSize * 0.04, y: tileSize * 0.02))
+        crackPathC.addLine(to: CGPoint(x: tileSize * 0.18, y: -tileSize * 0.18))
+
+        for (name, path) in [("crack_1", crackPathA), ("crack_2", crackPathB), ("crack_3", crackPathC)] {
+            let line = SKShapeNode(path: path)
+            line.name = name
+            line.strokeColor = SKColor(white: 0.08, alpha: 0.92)
+            line.lineWidth = 2.2
+            line.glowWidth = 2
+            line.zPosition = 2
+            line.alpha = 0
+            container.addChild(line)
+        }
+
+        return container
+    }
+
+    private func makeSwitchTriggerNode(texture: SKTexture) -> SKNode {
+        let container = SKNode()
+
+        let base = SKSpriteNode(texture: texture)
+        base.name = "base"
+        base.color = ArcadeStyle.Color.panelBottom
+        base.colorBlendFactor = 0.34
+        base.alpha = 0.9
+        base.setScale(0.92)
+        base.zPosition = 0
+        container.addChild(base)
+
+        let plate = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.76, height: tileSize * 0.76)), cornerRadius: 10)
+        plate.name = "plate"
+        plate.fillColor = SKColor(red: 0.1, green: 0.14, blue: 0.24, alpha: 0.92)
+        plate.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.78)
+        plate.lineWidth = 1.8
+        plate.glowWidth = 4
+        plate.position = snap(CGPoint(x: 0, y: -tileSize * 0.01))
+        plate.zPosition = 1
+        container.addChild(plate)
+
+        let outerRing = SKShapeNode(circleOfRadius: tileSize * 0.22)
+        outerRing.name = "outerRing"
+        outerRing.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.42)
+        outerRing.lineWidth = 1.2
+        outerRing.glowWidth = 2
+        outerRing.fillColor = .clear
+        outerRing.position = snap(CGPoint(x: 0, y: -tileSize * 0.015))
+        outerRing.zPosition = 1.4
+        container.addChild(outerRing)
+
+        let panel = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.54, height: tileSize * 0.54)), cornerRadius: 8)
+        panel.name = "panel"
+        panel.fillColor = SKColor(red: 0.07, green: 0.11, blue: 0.2, alpha: 0.98)
+        panel.strokeColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.74)
+        panel.lineWidth = 1.2
+        panel.glowWidth = 2
+        panel.position = snap(CGPoint(x: 0, y: -tileSize * 0.015))
+        panel.zPosition = 2
+        container.addChild(panel)
+
+        let ring = SKShapeNode(circleOfRadius: tileSize * 0.12)
+        ring.name = "ring"
+        ring.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.94)
+        ring.lineWidth = 1.7
+        ring.glowWidth = 4
+        ring.fillColor = .clear
+        ring.position = snap(CGPoint(x: 0, y: tileSize * 0.03))
+        ring.zPosition = 3
+        container.addChild(ring)
+
+        let stem = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.05, height: tileSize * 0.14)), cornerRadius: tileSize * 0.02)
+        stem.name = "stem"
+        stem.fillColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.94)
+        stem.strokeColor = .clear
+        stem.position = snap(CGPoint(x: 0, y: tileSize * 0.11))
+        stem.zPosition = 4
+        container.addChild(stem)
+
+        let core = SKShapeNode(circleOfRadius: tileSize * 0.055)
+        core.name = "core"
+        core.fillColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.96)
+        core.strokeColor = .clear
+        core.position = snap(CGPoint(x: 0, y: tileSize * 0.03))
+        core.zPosition = 5
+        container.addChild(core)
+
+        let badgeBar = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.2, height: tileSize * 0.035)), cornerRadius: tileSize * 0.016)
+        badgeBar.name = "badgeBar"
+        badgeBar.fillColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.82)
+        badgeBar.strokeColor = .clear
+        badgeBar.position = snap(CGPoint(x: 0, y: -tileSize * 0.22))
+        badgeBar.zPosition = 5
+        container.addChild(badgeBar)
+
+        for index in 0..<4 {
+            let marker = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.07, height: tileSize * 0.025)), cornerRadius: tileSize * 0.01)
+            marker.name = "marker_\(index)"
+            marker.fillColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.72)
+            marker.strokeColor = .clear
+            let angle = CGFloat(index) * (.pi / 2)
+            marker.position = snap(CGPoint(x: cos(angle) * tileSize * 0.18, y: -tileSize * 0.015 + sin(angle) * tileSize * 0.18))
+            marker.zRotation = angle
+            marker.zPosition = 4.5
+            container.addChild(marker)
+        }
+
+        let idlePulse = SKAction.repeatForever(.sequence([
+            .group([
+                .fadeAlpha(to: 0.7, duration: 0.8),
+                .scale(to: 0.92, duration: 0.8)
+            ]),
+            .group([
+                .fadeAlpha(to: 1.0, duration: 0.95),
+                .scale(to: 1.0, duration: 0.95)
+            ])
+        ]))
+        ring.run(idlePulse, withKey: "switchIdle")
+        core.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.8, duration: 0.65),
+            .fadeAlpha(to: 1.0, duration: 0.85)
+        ])), withKey: "switchIdle")
+
+        return container
+    }
+
+    private func makeSwitchBlockNode(texture: SKTexture) -> SKSpriteNode {
+        let base = SKSpriteNode(texture: texture)
+        base.name = "base"
+        base.color = ArcadeStyle.Color.accentCyan
+        base.colorBlendFactor = 0.26
+
+        let frame = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.84, height: tileSize * 0.84)), cornerRadius: 8)
+        frame.name = "frame"
+        frame.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.96)
+        frame.lineWidth = 1.8
+        frame.glowWidth = 5
+        frame.fillColor = .clear
+        frame.zPosition = 1
+        base.addChild(frame)
+
+        let panel = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.62, height: tileSize * 0.62)), cornerRadius: 6)
+        panel.name = "panel"
+        panel.fillColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.28)
+        panel.strokeColor = .clear
+        panel.position = snap(CGPoint(x: 0, y: 0))
+        panel.zPosition = 2
+        base.addChild(panel)
+
+        let inset = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.44, height: tileSize * 0.44)), cornerRadius: 4)
+        inset.name = "inset"
+        inset.fillColor = SKColor(red: 0.05, green: 0.1, blue: 0.18, alpha: 0.92)
+        inset.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.18)
+        inset.lineWidth = 0.8
+        inset.zPosition = 2.2
+        base.addChild(inset)
+
+        for index in -1...1 {
+            let bar = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.16, height: tileSize * 0.05)), cornerRadius: 2)
+            bar.name = "bar_\(index + 1)"
+            bar.fillColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.85)
+            bar.strokeColor = .clear
+            bar.zRotation = -.pi / 4
+            bar.position = snap(CGPoint(x: CGFloat(index) * tileSize * 0.16, y: CGFloat(index) * tileSize * 0.04))
+            bar.zPosition = 3
+            base.addChild(bar)
+        }
+
+        let verticalCore = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.06, height: tileSize * 0.36)), cornerRadius: 2)
+        verticalCore.name = "verticalCore"
+        verticalCore.fillColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.7)
+        verticalCore.strokeColor = .clear
+        verticalCore.zPosition = 2.9
+        base.addChild(verticalCore)
+
+        let railTop = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.48, height: tileSize * 0.03)), cornerRadius: tileSize * 0.012)
+        railTop.name = "railTop"
+        railTop.fillColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.42)
+        railTop.strokeColor = .clear
+        railTop.position = snap(CGPoint(x: 0, y: tileSize * 0.17))
+        railTop.zPosition = 2.6
+        base.addChild(railTop)
+
+        let railBottom = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.48, height: tileSize * 0.03)), cornerRadius: tileSize * 0.012)
+        railBottom.name = "railBottom"
+        railBottom.fillColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.42)
+        railBottom.strokeColor = .clear
+        railBottom.position = snap(CGPoint(x: 0, y: -tileSize * 0.17))
+        railBottom.zPosition = 2.6
+        base.addChild(railBottom)
+
+        let stateLight = SKShapeNode(circleOfRadius: tileSize * 0.05)
+        stateLight.name = "stateLight"
+        stateLight.fillColor = ArcadeStyle.Color.accentCyan
+        stateLight.strokeColor = .clear
+        stateLight.position = snap(CGPoint(x: tileSize * 0.22, y: tileSize * 0.22))
+        stateLight.glowWidth = 4
+        stateLight.zPosition = 4
+        base.addChild(stateLight)
+
+        let gateBar = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.34, height: tileSize * 0.045)), cornerRadius: tileSize * 0.02)
+        gateBar.name = "gateBar"
+        gateBar.fillColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.82)
+        gateBar.strokeColor = .clear
+        gateBar.position = snap(CGPoint(x: 0, y: -tileSize * 0.22))
+        gateBar.zPosition = 4
+        base.addChild(gateBar)
+
+        let passOutline = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.72, height: tileSize * 0.72)), cornerRadius: 7)
+        passOutline.name = "passOutline"
+        passOutline.strokeColor = ArcadeStyle.Color.accentGreen.withAlphaComponent(0.0)
+        passOutline.lineWidth = 1.4
+        passOutline.glowWidth = 2
+        passOutline.fillColor = .clear
+        passOutline.zPosition = 4.3
+        base.addChild(passOutline)
+
+        return base
+    }
+
+    private func updateSwitchTriggerVisuals(animated: Bool) {
         for node in switchNodes.values {
-            node.run(.group([
-                .fadeAlpha(to: 0.35, duration: 0.12),
-                .scale(to: 0.9, duration: 0.12)
+            let frameColor = switchActivated ? ArcadeStyle.Color.accentMagenta : ArcadeStyle.Color.accentCyan
+            let coreColor = switchActivated ? ArcadeStyle.Color.accentYellow : ArcadeStyle.Color.accentMagenta
+            let targetScale: CGFloat = switchActivated ? 1.03 : 1.0
+            let panelOffsetY = switchActivated ? -tileSize * 0.045 : -tileSize * 0.015
+            let plateOffsetY = switchActivated ? -tileSize * 0.032 : -tileSize * 0.01
+
+            if let base = node.childNode(withName: "base") as? SKSpriteNode {
+                base.color = switchActivated ? ArcadeStyle.Color.panelTop : ArcadeStyle.Color.panelBottom
+            }
+            if let plate = node.childNode(withName: "plate") as? SKShapeNode {
+                plate.strokeColor = frameColor.withAlphaComponent(switchActivated ? 1.0 : 0.78)
+                plate.fillColor = switchActivated
+                    ? SKColor(red: 0.13, green: 0.1, blue: 0.2, alpha: 0.96)
+                    : SKColor(red: 0.1, green: 0.14, blue: 0.24, alpha: 0.92)
+                plate.glowWidth = switchActivated ? 7 : 4
+                plate.position = snap(CGPoint(x: 0, y: plateOffsetY))
+            }
+            if let outerRing = node.childNode(withName: "outerRing") as? SKShapeNode {
+                outerRing.strokeColor = frameColor.withAlphaComponent(switchActivated ? 0.88 : 0.42)
+                outerRing.alpha = switchActivated ? 0.92 : 0.76
+                outerRing.glowWidth = switchActivated ? 5 : 2
+            }
+            if let panel = node.childNode(withName: "panel") as? SKShapeNode {
+                panel.strokeColor = switchActivated ? ArcadeStyle.Color.accentYellow.withAlphaComponent(0.82) : ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.74)
+                panel.fillColor = switchActivated
+                    ? ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.22)
+                    : SKColor(red: 0.07, green: 0.11, blue: 0.2, alpha: 0.98)
+                panel.position = snap(CGPoint(x: 0, y: panelOffsetY))
+            }
+            if let ring = node.childNode(withName: "ring") as? SKShapeNode {
+                ring.strokeColor = frameColor.withAlphaComponent(0.96)
+                ring.glowWidth = switchActivated ? 8 : 4
+            }
+            if let stem = node.childNode(withName: "stem") as? SKShapeNode {
+                stem.fillColor = frameColor.withAlphaComponent(0.96)
+            }
+            if let core = node.childNode(withName: "core") as? SKShapeNode {
+                core.fillColor = coreColor.withAlphaComponent(0.98)
+                core.glowWidth = switchActivated ? 7 : 3
+            }
+            if let badgeBar = node.childNode(withName: "badgeBar") as? SKShapeNode {
+                badgeBar.fillColor = switchActivated ? ArcadeStyle.Color.accentYellow.withAlphaComponent(0.88) : ArcadeStyle.Color.textPrimary.withAlphaComponent(0.82)
+            }
+            for index in 0..<4 {
+                if let marker = node.childNode(withName: "marker_\(index)") as? SKShapeNode {
+                    marker.fillColor = switchActivated
+                        ? ArcadeStyle.Color.accentYellow.withAlphaComponent(0.84)
+                        : ArcadeStyle.Color.textPrimary.withAlphaComponent(0.72)
+                }
+            }
+
+            node.removeAction(forKey: "switchTriggerVisual")
+            if animated {
+                node.run(.sequence([
+                    .group([
+                        .scale(to: targetScale, duration: 0.06),
+                        .fadeAlpha(to: 0.84, duration: 0.06)
+                    ]),
+                    .group([
+                        .scale(to: 1.0, duration: 0.14),
+                        .fadeAlpha(to: 1.0, duration: 0.14)
+                    ])
+                ]), withKey: "switchTriggerVisual")
+            } else {
+                node.alpha = 1.0
+                node.setScale(1.0)
+            }
+        }
+    }
+
+    private func updateSwitchBlockVisuals(animated: Bool) {
+        let passable = switchActivated
+        for (index, point) in orderedSwitchBlockPoints.enumerated() {
+            guard let node = switchBlockNodes[point] else { continue }
+            node.removeAction(forKey: "switchBlockVisual")
+            let targetAlpha: CGFloat = passable ? 0.26 : 0.98
+            let targetScale: CGFloat = passable ? 0.88 : 1.0
+            let targetColor = passable ? ArcadeStyle.Color.panelBorder : ArcadeStyle.Color.accentCyan
+            node.color = targetColor
+            node.colorBlendFactor = passable ? 0.08 : 0.3
+            if let frame = node.childNode(withName: "frame") as? SKShapeNode {
+                frame.strokeColor = (passable ? ArcadeStyle.Color.accentGreen : ArcadeStyle.Color.accentCyan).withAlphaComponent(passable ? 0.54 : 0.98)
+                frame.alpha = passable ? 0.54 : 1.0
+                frame.glowWidth = passable ? 1.5 : 6
+            }
+            if let panel = node.childNode(withName: "panel") as? SKShapeNode {
+                panel.fillColor = passable
+                    ? ArcadeStyle.Color.accentGreen.withAlphaComponent(0.04)
+                    : ArcadeStyle.Color.accentCyan.withAlphaComponent(0.16)
+                panel.alpha = passable ? 0.38 : 0.95
+            }
+            if let inset = node.childNode(withName: "inset") as? SKShapeNode {
+                inset.fillColor = passable
+                    ? SKColor(red: 0.04, green: 0.09, blue: 0.11, alpha: 0.55)
+                    : SKColor(red: 0.05, green: 0.1, blue: 0.18, alpha: 0.92)
+                inset.strokeColor = (passable ? ArcadeStyle.Color.accentGreen : ArcadeStyle.Color.accentCyan).withAlphaComponent(passable ? 0.12 : 0.22)
+            }
+            if let verticalCore = node.childNode(withName: "verticalCore") as? SKShapeNode {
+                verticalCore.fillColor = (passable ? ArcadeStyle.Color.accentGreen : ArcadeStyle.Color.accentCyan).withAlphaComponent(passable ? 0.24 : 0.72)
+                verticalCore.alpha = passable ? 0.36 : 1.0
+            }
+            if let railTop = node.childNode(withName: "railTop") as? SKShapeNode {
+                railTop.fillColor = (passable ? ArcadeStyle.Color.accentGreen : ArcadeStyle.Color.accentCyan).withAlphaComponent(passable ? 0.18 : 0.42)
+                railTop.alpha = passable ? 0.44 : 1.0
+            }
+            if let railBottom = node.childNode(withName: "railBottom") as? SKShapeNode {
+                railBottom.fillColor = (passable ? ArcadeStyle.Color.accentGreen : ArcadeStyle.Color.accentCyan).withAlphaComponent(passable ? 0.18 : 0.42)
+                railBottom.alpha = passable ? 0.44 : 1.0
+            }
+            for index in 0...2 {
+                if let bar = node.childNode(withName: "bar_\(index)") as? SKShapeNode {
+                    bar.alpha = passable ? 0.08 : 0.82
+                    bar.fillColor = passable ? ArcadeStyle.Color.accentGreen.withAlphaComponent(0.36) : ArcadeStyle.Color.textPrimary.withAlphaComponent(0.86)
+                }
+            }
+            if let stateLight = node.childNode(withName: "stateLight") as? SKShapeNode {
+                stateLight.fillColor = passable ? ArcadeStyle.Color.accentGreen : ArcadeStyle.Color.accentCyan
+                stateLight.alpha = passable ? 0.78 : 1.0
+                stateLight.glowWidth = passable ? 6 : 4
+            }
+            if let gateBar = node.childNode(withName: "gateBar") as? SKShapeNode {
+                gateBar.fillColor = passable ? ArcadeStyle.Color.accentGreen.withAlphaComponent(0.62) : ArcadeStyle.Color.textPrimary.withAlphaComponent(0.82)
+                gateBar.alpha = passable ? 0.55 : 0.92
+            }
+            if let passOutline = node.childNode(withName: "passOutline") as? SKShapeNode {
+                passOutline.strokeColor = ArcadeStyle.Color.accentGreen.withAlphaComponent(passable ? 0.72 : 0.0)
+                passOutline.alpha = passable ? 0.82 : 0.0
+                passOutline.glowWidth = passable ? 3 : 0
+            }
+            if animated {
+                node.run(.sequence([
+                    .wait(forDuration: Double(index) * 0.012),
+                    .group([
+                        .fadeAlpha(to: min(1.0, targetAlpha + 0.16), duration: 0.05),
+                        .scale(to: passable ? 0.93 : 1.05, duration: 0.05)
+                    ]),
+                    .group([
+                        .fadeAlpha(to: targetAlpha, duration: 0.16),
+                        .scale(to: targetScale, duration: 0.16)
+                    ])
+                ]), withKey: "switchBlockVisual")
+            } else {
+                node.alpha = targetAlpha
+                node.setScale(targetScale)
+            }
+        }
+    }
+
+    private func makeMovingBlockNode(texture: SKTexture, track: [GridPoint]) -> SKNode {
+        let container = SKNode()
+
+        let shadow = makeGroundShadow(size: CGSize(width: tileSize * 0.4, height: tileSize * 0.16), alpha: 0.22)
+        shadow.position = CGPoint(x: 0, y: -tileSize * 0.16)
+        shadow.zPosition = -2
+        container.addChild(shadow)
+
+        let halo = makeGlowHalo(radius: tileSize * 0.2, color: ArcadeStyle.Color.accentMagenta, alpha: 0.26, glowWidth: 8)
+        halo.name = "halo"
+        halo.zPosition = -1
+        container.addChild(halo)
+
+        let base = SKSpriteNode(texture: texture)
+        base.name = "base"
+        base.color = ArcadeStyle.Color.accentMagenta
+        base.colorBlendFactor = 0.54
+        base.zPosition = 0
+        container.addChild(base)
+
+        let frame = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.8, height: tileSize * 0.8)), cornerRadius: 8)
+        frame.strokeColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.94)
+        frame.lineWidth = 1.6
+        frame.glowWidth = 5
+        frame.fillColor = .clear
+        frame.zPosition = 1
+        container.addChild(frame)
+
+        let panel = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.58, height: tileSize * 0.58)), cornerRadius: 6)
+        panel.fillColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.16)
+        panel.strokeColor = .clear
+        panel.zPosition = 2
+        container.addChild(panel)
+
+        for index in -1...1 {
+            let bar = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.16, height: tileSize * 0.05)), cornerRadius: 2)
+            bar.fillColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.82)
+            bar.strokeColor = .clear
+            bar.zRotation = -.pi / 6
+            bar.position = snap(CGPoint(x: CGFloat(index) * tileSize * 0.15, y: 0))
+            bar.zPosition = 3
+            container.addChild(bar)
+        }
+
+        let pulse = SKAction.repeatForever(.sequence([
+            .group([
+                .fadeAlpha(to: 0.38, duration: 0.52),
+                .scale(to: 1.05, duration: 0.52)
+            ]),
+            .group([
+                .fadeAlpha(to: 0.22, duration: 0.62),
+                .scale(to: 1.0, duration: 0.62)
+            ])
+        ]))
+        halo.run(pulse, withKey: "movingBlockPulse")
+
+        if let first = track.first, let last = track.last, first != last {
+            let horizontal = first.row == last.row
+            let startPosition = positionFor(first)
+            for (index, point) in [first, last].enumerated() {
+                let anchor = SKShapeNode(
+                    rectOf: snapSize(CGSize(
+                        width: horizontal ? tileSize * 0.17 : tileSize * 0.09,
+                        height: horizontal ? tileSize * 0.09 : tileSize * 0.17
+                    )),
+                    cornerRadius: tileSize * 0.022
+                )
+                anchor.fillColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.18)
+                anchor.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.48)
+                anchor.lineWidth = 1.0
+                anchor.glowWidth = 1.5
+                anchor.alpha = 0.68
+                anchor.zPosition = -1.5
+                let pointPosition = positionFor(point)
+                anchor.position = snap(CGPoint(x: pointPosition.x - startPosition.x, y: pointPosition.y - startPosition.y))
+                container.addChild(anchor)
+                anchor.run(.repeatForever(.sequence([
+                    .wait(forDuration: Double(index) * 0.18),
+                    .group([
+                        timed(.fadeAlpha(to: 0.96, duration: 0.42), mode: .easeInEaseOut),
+                        timed(.scale(to: 1.08, duration: 0.42), mode: .easeInEaseOut)
+                    ]),
+                    .group([
+                        timed(.fadeAlpha(to: 0.62, duration: 0.62), mode: .easeInEaseOut),
+                        timed(.scale(to: 1.0, duration: 0.62), mode: .easeInEaseOut)
+                    ])
+                ])), withKey: "movingAnchorPulse_\(index)")
+            }
+        }
+
+        return container
+    }
+
+    private func movingBlockTrack(for definition: MovingBlockData) -> [GridPoint] {
+        if let cached = movingBlockTracks.first(where: { $0.value.first == definition.start && $0.value.last == definition.end })?.value {
+            return cached
+        }
+
+        if definition.start.row == definition.end.row {
+            let row = definition.start.row
+            let lower = min(definition.start.col, definition.end.col)
+            let upper = max(definition.start.col, definition.end.col)
+            return (lower...upper).map { GridPoint(row: row, col: $0) }
+        }
+
+        let col = definition.start.col
+        let lower = min(definition.start.row, definition.end.row)
+        let upper = max(definition.start.row, definition.end.row)
+        return (lower...upper).map { GridPoint(row: $0, col: col) }
+    }
+
+    private func movingBlockProgress(for track: [GridPoint], definition: MovingBlockData, now: TimeInterval) -> Double {
+        guard track.count > 1 else { return 0 }
+        let segmentCount = track.count - 1
+        let tileTravelDuration = stepDuration / max(0.35, definition.speedMultiplier)
+        let total = Double(segmentCount * 2)
+        var progress = ((now - mazeMechanicStartTime) / tileTravelDuration) + definition.phaseOffset
+        progress.formTruncatingRemainder(dividingBy: total)
+        if progress < 0 {
+            progress += total
+        }
+        if progress <= Double(segmentCount) {
+            return progress
+        }
+        return total - progress
+    }
+
+    private func movingBlockInterpolatedPosition(for track: [GridPoint], definition: MovingBlockData, now: TimeInterval) -> CGPoint {
+        guard let first = track.first else { return .zero }
+        guard track.count > 1 else { return positionFor(first) }
+
+        let progress = movingBlockProgress(for: track, definition: definition, now: now)
+        let lowerIndex = max(0, min(track.count - 1, Int(floor(progress))))
+        let upperIndex = min(track.count - 1, lowerIndex + 1)
+        let blend = CGFloat(progress - Double(lowerIndex))
+        let startPosition = positionFor(track[lowerIndex])
+        let endPosition = positionFor(track[upperIndex])
+        return snap(CGPoint(
+            x: startPosition.x + (endPosition.x - startPosition.x) * blend,
+            y: startPosition.y + (endPosition.y - startPosition.y) * blend
+        ))
+    }
+
+    private func movingBlockOccupiedTile(for track: [GridPoint], definition: MovingBlockData, now: TimeInterval) -> GridPoint? {
+        guard !track.isEmpty else { return nil }
+        let progress = movingBlockProgress(for: track, definition: definition, now: now)
+        let index = max(0, min(track.count - 1, Int(progress.rounded())))
+        return track[index]
+    }
+
+    private func updateMovingBlocks(now: TimeInterval) {
+        guard !movingBlockDefinitions.isEmpty else {
+            movingBlockOccupiedTiles.removeAll()
+            return
+        }
+
+        var occupied = Set<GridPoint>()
+        for (index, definition) in movingBlockDefinitions.enumerated() {
+            let track = movingBlockTracks[index] ?? movingBlockTrack(for: definition)
+            movingBlockTracks[index] = track
+            if let occupiedTile = movingBlockOccupiedTile(for: track, definition: definition, now: now) {
+                occupied.insert(occupiedTile)
+            }
+            if let node = movingBlockNodes[index] {
+                node.position = movingBlockInterpolatedPosition(for: track, definition: definition, now: now)
+                updateMovingBlockVisual(node, track: track, definition: definition, now: now)
+            }
+        }
+        movingBlockOccupiedTiles = occupied
+    }
+
+    private func updateMovingBlockVisual(_ node: SKNode, track: [GridPoint], definition: MovingBlockData, now: TimeInterval) {
+        guard track.count > 1 else { return }
+        let progress = movingBlockProgress(for: track, definition: definition, now: now)
+        let segmentCount = max(1, track.count - 1)
+        let normalized = progress / Double(segmentCount)
+        let distanceToEnd = min(normalized, 1.0 - normalized)
+        let nearEndpoint = distanceToEnd < 0.085
+
+        if let halo = node.childNode(withName: "halo") as? SKShapeNode {
+            halo.run(.group([
+                timed(.fadeAlpha(to: nearEndpoint ? 0.34 : 0.24, duration: 0.08), mode: .easeInEaseOut),
+                timed(.scale(to: nearEndpoint ? 0.92 : 1.0, duration: 0.08), mode: .easeInEaseOut)
+            ]), withKey: "anticipation")
+        }
+        if let base = node.childNode(withName: "base") as? SKSpriteNode {
+            base.run(timed(.scale(to: nearEndpoint ? 0.95 : 1.0, duration: 0.08), mode: .easeInEaseOut), withKey: "anticipation")
+        }
+    }
+
+    private func chaserPositionFor(_ point: GridPoint) -> CGPoint {
+        let base = positionFor(point)
+        return snap(CGPoint(x: base.x - tileSize * 0.14, y: base.y - tileSize * 0.14))
+    }
+
+    private func setupChaserIfNeeded(texture: SKTexture) {
+        guard let chaserSpawn = currentMaze?.chaserSpawn else { return }
+
+        let chaser = SKSpriteNode(texture: texture)
+        chaser.size = snapSize(CGSize(width: tileSize * 0.56, height: tileSize * 0.56))
+        chaser.color = ArcadeStyle.Color.accentMagenta
+        chaser.colorBlendFactor = 0.88
+        chaser.alpha = 0.82
+        chaser.position = chaserPositionFor(chaserSpawn.spawn)
+        chaser.zPosition = 18.5
+
+        let shadow = makeGroundShadow(size: CGSize(width: tileSize * 0.32, height: tileSize * 0.13), alpha: 0.24)
+        shadow.position = CGPoint(x: 0, y: -tileSize * 0.14)
+        shadow.zPosition = -2
+        chaser.addChild(shadow)
+
+        let glow = makeGlowHalo(radius: tileSize * 0.18, color: ArcadeStyle.Color.accentMagenta, alpha: 0.48, glowWidth: 10)
+        glow.zPosition = -1
+        chaser.addChild(glow)
+        glow.run(.repeatForever(.sequence([
+            .group([
+                .fadeAlpha(to: 0.62, duration: 0.45),
+                .scale(to: 1.06, duration: 0.45)
+            ]),
+            .group([
+                .fadeAlpha(to: 0.42, duration: 0.55),
+                .scale(to: 1.0, duration: 0.55)
+            ])
+        ])), withKey: "chaserPulse")
+
+        worldNode.addChild(chaser)
+        chaserNode = chaser
+        chaserGrid = chaserSpawn.spawn
+        playChaserReveal()
+    }
+
+    private func playChaserReveal() {
+        guard let chaser = chaserNode, !chaserRevealPlayed else { return }
+        chaserRevealPlayed = true
+        chaser.alpha = 0
+        chaser.setScale(0.72)
+
+        let flare = SKShapeNode(circleOfRadius: tileSize * 0.18)
+        flare.position = chaser.position
+        flare.strokeColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.94)
+        flare.lineWidth = 2.2
+        flare.glowWidth = 9
+        flare.fillColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.08)
+        flare.zPosition = 18.4
+        worldNode.addChild(flare)
+        flare.run(.sequence([
+            .group([
+                timed(.scale(to: 2.0, duration: 0.22), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.22), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+
+        chaser.run(.sequence([
+            .group([
+                timed(.fadeAlpha(to: 0.96, duration: 0.16), mode: .easeOut),
+                timed(.scale(to: 1.05, duration: 0.16), mode: .easeOut)
+            ]),
+            timed(.scale(to: 1.0, duration: 0.14), mode: .easeInEaseOut)
+        ]), withKey: "chaserReveal")
+    }
+
+    private func playChaserTargetLockCue() {
+        guard let chaser = chaserNode, !chaserTargetLockPlayed else { return }
+        chaserTargetLockPlayed = true
+        let cue = SKShapeNode(circleOfRadius: tileSize * 0.08)
+        cue.position = CGPoint(x: 0, y: tileSize * 0.18)
+        cue.strokeColor = ArcadeStyle.Color.accentYellow.withAlphaComponent(0.95)
+        cue.lineWidth = 1.8
+        cue.glowWidth = 6
+        cue.fillColor = .clear
+        cue.zPosition = 3
+        chaser.addChild(cue)
+        cue.run(.sequence([
+            .group([
+                timed(.scale(to: 2.0, duration: 0.18), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.18), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func updateChaserThreatFeedback() {
+        guard currentMaze?.chaserSpawn != nil else { return }
+        let threatDistance = abs(chaserGrid.row - playerGrid.row) + abs(chaserGrid.col - playerGrid.col)
+        let nextLevel: Int
+        if threatDistance <= 2 {
+            nextLevel = 2
+        } else if threatDistance <= 4 {
+            nextLevel = 1
+        } else {
+            nextLevel = 0
+        }
+        guard nextLevel != chaserThreatLevel else { return }
+        chaserThreatLevel = nextLevel
+
+        if let timerCard {
+            timerCard.removeAction(forKey: "chaserThreat")
+            if nextLevel > 0 {
+                let targetAlpha: CGFloat = nextLevel == 2 ? 0.24 : 0.14
+                timerCard.run(.repeatForever(.sequence([
+                    timed(.colorize(with: ArcadeStyle.Color.accentMagenta, colorBlendFactor: targetAlpha, duration: nextLevel == 2 ? 0.22 : 0.35), mode: .easeInEaseOut),
+                    timed(.colorize(withColorBlendFactor: 0.0, duration: nextLevel == 2 ? 0.22 : 0.35), mode: .easeInEaseOut)
+                ])), withKey: "chaserThreat")
+            } else {
+                timerCard.run(timed(.colorize(withColorBlendFactor: 0.0, duration: 0.18), mode: .easeOut))
+            }
+        }
+
+        if let topHudBar {
+            topHudBar.removeAction(forKey: "chaserThreat")
+            if nextLevel == 2 {
+                topHudBar.run(.sequence([
+                    timed(.colorize(with: ArcadeStyle.Color.accentMagenta, colorBlendFactor: 0.12, duration: 0.08), mode: .easeOut),
+                    timed(.colorize(withColorBlendFactor: 0.0, duration: 0.16), mode: .easeInEaseOut)
+                ]), withKey: "chaserThreat")
+            }
+        }
+    }
+
+    private func chaserStepDuration() -> TimeInterval {
+        stepDuration / max(0.3, chaserSpeedMultiplier)
+    }
+
+    private func currentChaserTarget() -> GridPoint {
+        guard chaserBehavior == .delayed else { return playerGrid }
+        guard !playerPathHistory.isEmpty else { return playerGrid }
+        let delayedIndex = max(0, playerPathHistory.count - 1 - chaserTrailDelaySteps)
+        return playerPathHistory[delayedIndex]
+    }
+
+    private func chaserCanEnter(_ point: GridPoint) -> Bool {
+        guard let tile = tileAt(point) else { return false }
+        if tile == "#" { return false }
+        if movingBlockOccupiedTiles.contains(point) { return false }
+        if tile == "E", exitRequiresKey && !exitIsUnlocked { return false }
+        if tile == "X", !switchActivated { return false }
+        if tile == "B", !isBreakableDestroyed(at: point) { return false }
+        if tile == "G", !gateIsOpen { return false }
+        return true
+    }
+
+    private func chaserAdvanceOutcome(from point: GridPoint, direction: MoveDirection) -> (destination: GridPoint, usedTeleporter: Bool)? {
+        let next = point.moved(by: direction)
+        guard chaserCanEnter(next) else { return nil }
+        if let teleported = teleporterMap[next] {
+            guard chaserCanEnter(teleported) else { return nil }
+            return (teleported, true)
+        }
+        return (next, false)
+    }
+
+    private func availableChaserDirections(from point: GridPoint) -> [MoveDirection] {
+        if let forced = oneWayDirections[point], chaserAdvanceOutcome(from: point, direction: forced) != nil {
+            return [forced]
+        }
+        return MoveDirection.allCases.filter { chaserAdvanceOutcome(from: point, direction: $0) != nil }
+    }
+
+    private func nextChaserDirection(from point: GridPoint) -> MoveDirection? {
+        let target = currentChaserTarget()
+        guard point != target else { return nil }
+
+        let initialDirections = availableChaserDirections(from: point)
+        var queue: [(GridPoint, MoveDirection)] = []
+        var visited = Set<GridPoint>([point])
+        var index = 0
+
+        for direction in initialDirections {
+            guard let outcome = chaserAdvanceOutcome(from: point, direction: direction) else { continue }
+            if visited.insert(outcome.destination).inserted {
+                queue.append((outcome.destination, direction))
+            }
+        }
+
+        while index < queue.count {
+            let (candidate, firstMove) = queue[index]
+            index += 1
+            if candidate == target {
+                return firstMove
+            }
+            for direction in availableChaserDirections(from: candidate) {
+                guard let outcome = chaserAdvanceOutcome(from: candidate, direction: direction) else { continue }
+                if visited.insert(outcome.destination).inserted {
+                    queue.append((outcome.destination, firstMove))
+                }
+            }
+        }
+
+        return initialDirections.min { lhs, rhs in
+            let lhsPoint = chaserAdvanceOutcome(from: point, direction: lhs)?.destination ?? point
+            let rhsPoint = chaserAdvanceOutcome(from: point, direction: rhs)?.destination ?? point
+            let lhsDistance = abs(lhsPoint.row - target.row) + abs(lhsPoint.col - target.col)
+            let rhsDistance = abs(rhsPoint.row - target.row) + abs(rhsPoint.col - target.col)
+            return lhsDistance < rhsDistance
+        }
+    }
+
+    private func updateChaser(now: TimeInterval) {
+        guard currentGameState == .playing, let chaser = chaserNode, !chaserCaughtPlayer else { return }
+        guard currentMaze?.chaserSpawn != nil else { return }
+        guard !chaserIsMoving else { return }
+
+        if now < chaserStartAt {
+            return
+        }
+
+        if chaser.alpha < 0.96 {
+            chaser.run(.fadeAlpha(to: 0.96, duration: 0.12), withKey: "chaserWake")
+        }
+        playChaserTargetLockCue()
+
+        guard now >= chaserNextStepTime else { return }
+
+        if chaserCurrentDirection == nil || now >= chaserNextRepathTime {
+            chaserCurrentDirection = nextChaserDirection(from: chaserGrid)
+            chaserNextRepathTime = now + chaserRepathDelay
+        }
+
+        guard let direction = chaserCurrentDirection,
+              let outcome = chaserAdvanceOutcome(from: chaserGrid, direction: direction) else {
+            chaserCurrentDirection = nil
+            chaserNextStepTime = now + 0.08
+            return
+        }
+
+        chaserIsMoving = true
+        chaserNextStepTime = now + chaserStepDuration()
+        let destination = chaserPositionFor(outcome.destination)
+        let move = SKAction.move(to: destination, duration: chaserStepDuration())
+        move.timingMode = .linear
+        chaser.run(.sequence([
+            move,
+            .run { [weak self] in
+                self?.handleChaserArrival(at: outcome.destination, usedTeleporter: outcome.usedTeleporter)
+            }
+        ]), withKey: "chaserStep")
+    }
+
+    private func handleChaserArrival(at point: GridPoint, usedTeleporter: Bool) {
+        chaserIsMoving = false
+        chaserGrid = point
+        if usedTeleporter {
+            SoundFX.playTeleport(on: self)
+            chaserNode?.run(.sequence([
+                .scale(to: 0.84, duration: 0.05),
+                .scale(to: 1.0, duration: 0.05)
+            ]), withKey: "chaserTeleportPulse")
+        }
+        if point == playerGrid {
+            handleChaserCaughtPlayer()
+        }
+    }
+
+    private func handleChaserCaughtPlayer() {
+        guard currentGameState == .playing,
+              !chaserCaughtPlayer,
+              chaserNode != nil,
+              currentMaze?.chaserSpawn != nil else { return }
+        chaserCaughtPlayer = true
+        playerNode?.removeAllActions()
+        botNode?.removeAllActions()
+        chaserNode?.removeAllActions()
+        cameraNode.removeAllActions()
+        stopSliding(reason: .manual)
+        SoundFX.playBlocked(on: self)
+        playerNode?.run(.sequence([
+            .group([
+                timed(.fadeAlpha(to: 0.38, duration: 0.08), mode: .easeOut),
+                timed(.scale(to: 0.82, duration: 0.08), mode: .easeOut)
+            ]),
+            .group([
+                timed(.fadeAlpha(to: 1.0, duration: 0.12), mode: .easeOut),
+                timed(.scale(to: 1.0, duration: 0.12), mode: .easeOut)
+            ])
+        ]), withKey: "chaserCatchFlash")
+        if let playerPosition = playerNode?.position {
+            let burst = SKShapeNode(circleOfRadius: tileSize * 0.16)
+            burst.position = playerPosition
+            burst.strokeColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.95)
+            burst.lineWidth = 2.6
+            burst.glowWidth = 9
+            burst.fillColor = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.08)
+            burst.zPosition = 26
+            worldNode.addChild(burst)
+            burst.run(.sequence([
+                .group([
+                    timed(.scale(to: 2.2, duration: 0.18), mode: .easeOut),
+                    timed(.fadeOut(withDuration: 0.18), mode: .easeOut)
+                ]),
+                .removeFromParent()
             ]))
         }
-        updateDoorVisuals()
-        if botDifficulty == .hard {
-            primeHardBotDirectionCache()
+
+        if isChallengeMode {
+            finishChallengeRun()
+            return
         }
+
+        setGameState(.levelCompleted)
+        applyGameplayCameraScale()
+        showResultOverlay(
+            stars: nil,
+            headline: "CAUGHT!",
+            timeText: "Your Time: \(formattedClockTime(displayedElapsedTime()))",
+            detailLines: ["The chaser reached you. Keep more distance and read the route earlier."],
+            nextEnabled: false
+        )
+    }
+
+    private func updateBreakableVisual(at point: GridPoint, animated: Bool) {
+        guard let node = breakableNodes[point] else { return }
+        let hits = breakableHits[point] ?? 0
+        let destroyed = hits >= 3
+        let damageProgress = CGFloat(min(3, hits)) / 3.0
+
+        if let base = node.childNode(withName: "base") as? SKSpriteNode {
+            base.color = destroyed
+                ? ArcadeStyle.Color.accentCyan
+                : SKColor(
+                    red: 1.0,
+                    green: 0.84 - damageProgress * 0.28,
+                    blue: 0.22,
+                    alpha: 1.0
+                )
+            base.colorBlendFactor = destroyed ? 0.18 : 0.42 + damageProgress * 0.16
+            base.alpha = destroyed ? 0.12 : 0.94
+        }
+        if let halo = node.childNode(withName: "halo") as? SKShapeNode {
+            let haloColor = destroyed ? ArcadeStyle.Color.accentCyan : ArcadeStyle.Color.accentYellow
+            halo.fillColor = haloColor.withAlphaComponent(destroyed ? 0.03 : 0.10 + damageProgress * 0.06)
+            halo.strokeColor = haloColor.withAlphaComponent(destroyed ? 0.06 : 0.16 + damageProgress * 0.08)
+            halo.alpha = destroyed ? 0.12 : 0.22 + damageProgress * 0.12
+        }
+        if let panel = node.childNode(withName: "panel") as? SKShapeNode {
+            panel.fillColor = destroyed
+                ? SKColor(red: 0.06, green: 0.12, blue: 0.15, alpha: 0.55)
+                : SKColor(
+                    red: 0.22 + damageProgress * 0.10,
+                    green: 0.16 - damageProgress * 0.04,
+                    blue: 0.08,
+                    alpha: 0.94
+                )
+            panel.strokeColor = destroyed
+                ? ArcadeStyle.Color.accentCyan.withAlphaComponent(0.18)
+                : SKColor(red: 1.0, green: 0.82, blue: 0.38, alpha: 0.26 + damageProgress * 0.18)
+        }
+        if let frame = node.childNode(withName: "frame") as? SKShapeNode {
+            frame.strokeColor = destroyed
+                ? ArcadeStyle.Color.accentCyan.withAlphaComponent(0.5)
+                : SKColor(red: 1.0, green: 0.9 - damageProgress * 0.14, blue: 0.3, alpha: 0.95)
+            frame.alpha = destroyed ? 0.45 : 1.0
+            frame.glowWidth = destroyed ? 1.5 : 2.5 + damageProgress * 1.5
+        }
+        for braceName in ["brace_left", "brace_right"] {
+            if let brace = node.childNode(withName: braceName) as? SKShapeNode {
+                brace.alpha = destroyed ? 0.12 : 0.34 - damageProgress * 0.12
+            }
+        }
+
+        for index in 0..<3 {
+            if let pip = node.childNode(withName: "hp_\(index)") as? SKShapeNode {
+                pip.alpha = index < (3 - min(3, hits)) ? 1.0 : 0.18
+            }
+            if let crack = node.childNode(withName: "crack_\(index + 1)") as? SKShapeNode {
+                crack.alpha = hits > index ? (destroyed ? 0.12 : 0.9) : 0.0
+            }
+        }
+
+        if animated {
+            node.removeAction(forKey: "breakablePulse")
+            node.run(.sequence([
+                .scale(to: destroyed ? 1.06 : 0.95, duration: 0.05),
+                .scale(to: destroyed ? 0.88 : 1.0, duration: destroyed ? 0.18 : 0.14)
+            ]), withKey: "breakablePulse")
+        } else {
+            node.setScale(destroyed ? 0.88 : 1.0)
+        }
+    }
+
+    private func updateAllBreakableVisuals(animated: Bool) {
+        for point in orderedBreakablePoints {
+            updateBreakableVisual(at: point, animated: animated)
+        }
+    }
+
+    @discardableResult
+    private func registerBreakableHit(at point: GridPoint, triggeredByBot: Bool) -> Bool {
+        guard canHitBreakable(at: point) else { return false }
+        let nextHits = min(3, (breakableHits[point] ?? 0) + 1)
+        breakableHits[point] = nextHits
+        updateBreakableVisual(at: point, animated: false)
+        animateBreakableImpact(at: point, hitCount: nextHits)
+        if nextHits >= 3 {
+            SoundFX.playUnlock(on: self)
+        } else if !triggeredByBot {
+            SoundFX.playBlocked(on: self)
+        }
+        invalidateHardBotDirectionCacheForDynamicStateChange()
+        return true
+    }
+
+    private func animateBreakableImpact(at point: GridPoint, hitCount: Int) {
+        guard let node = breakableNodes[point] else { return }
+        let destroyed = hitCount >= 3
+        let worldPosition = node.position
+        let intensity = min(1.0, CGFloat(hitCount) / 3.0)
+
+        let squashX: CGFloat
+        let squashY: CGFloat
+        let overshoot: CGFloat
+        let shakeDistance: CGFloat
+        let ringScale: CGFloat
+        let ringDuration: TimeInterval
+        let shardCount: Int
+        let shardDistance: CGFloat
+        let shardSize = CGSize(width: destroyed ? 12 : (hitCount == 2 ? 9 : 7), height: destroyed ? 4 : 3)
+        let effectColor: SKColor
+
+        switch hitCount {
+        case 1:
+            squashX = 1.03
+            squashY = 0.90
+            overshoot = 1.01
+            shakeDistance = tileSize * 0.05
+            ringScale = 1.22
+            ringDuration = 0.14
+            shardCount = 4
+            shardDistance = tileSize * 0.22
+            effectColor = ArcadeStyle.Color.accentYellow
+        case 2:
+            squashX = 1.05
+            squashY = 0.84
+            overshoot = 1.03
+            shakeDistance = tileSize * 0.09
+            ringScale = 1.42
+            ringDuration = 0.18
+            shardCount = 7
+            shardDistance = tileSize * 0.32
+            effectColor = SKColor(red: 1.0, green: 0.72, blue: 0.24, alpha: 1.0)
+        default:
+            squashX = 1.08
+            squashY = 0.78
+            overshoot = 1.06
+            shakeDistance = tileSize * 0.12
+            ringScale = 1.82
+            ringDuration = 0.26
+            shardCount = 10
+            shardDistance = tileSize * 0.50
+            effectColor = SKColor(red: 1.0, green: 0.82, blue: 0.36, alpha: 1.0)
+        }
+
+        if let halo = node.childNode(withName: "halo") as? SKShapeNode {
+            halo.removeAction(forKey: "breakableHaloPulse")
+            halo.run(.sequence([
+                .group([
+                    .fadeAlpha(to: destroyed ? 0.54 : 0.28 + intensity * 0.2, duration: 0.05),
+                    .scale(to: destroyed ? 1.24 : 1.04 + intensity * 0.12, duration: 0.05)
+                ]),
+                .group([
+                    .fadeAlpha(to: destroyed ? 0.10 : 0.16 + intensity * 0.06, duration: destroyed ? 0.30 : 0.16),
+                    .scale(to: 1.0, duration: destroyed ? 0.30 : 0.16)
+                ])
+            ]), withKey: "breakableHaloPulse")
+        }
+
+        node.removeAction(forKey: "breakableImpact")
+        let settle = SKAction.run {
+            node.xScale = destroyed ? 0.84 : 1.0
+            node.yScale = destroyed ? 0.84 : 1.0
+            node.position = self.snap(worldPosition)
+            node.zRotation = 0
+        }
+        let impactSequence: [SKAction]
+        if hitCount == 2 {
+            impactSequence = [
+                .group([
+                    timed(.scaleX(to: squashX, duration: 0.05), mode: .easeOut),
+                    timed(.scaleY(to: squashY, duration: 0.05), mode: .easeOut),
+                    timed(.moveBy(x: -shakeDistance, y: 0, duration: 0.05), mode: .easeOut),
+                    timed(.rotate(toAngle: -0.045, duration: 0.05), mode: .easeOut)
+                ]),
+                .group([
+                    timed(.scaleX(to: 0.94, duration: 0.04), mode: .easeInEaseOut),
+                    timed(.scaleY(to: 1.04, duration: 0.04), mode: .easeInEaseOut),
+                    timed(.moveBy(x: shakeDistance * 2.0, y: 0, duration: 0.04), mode: .easeInEaseOut),
+                    timed(.rotate(toAngle: 0.038, duration: 0.04), mode: .easeInEaseOut)
+                ]),
+                .group([
+                    timed(.scaleX(to: overshoot, duration: 0.07), mode: .easeOut),
+                    timed(.scaleY(to: 0.98, duration: 0.07), mode: .easeOut),
+                    timed(.move(to: worldPosition, duration: 0.07), mode: .easeOut),
+                    timed(.rotate(toAngle: 0.0, duration: 0.07), mode: .easeOut)
+                ]),
+                settle
+            ]
+        } else {
+            impactSequence = [
+                .group([
+                    timed(.scaleX(to: squashX, duration: 0.05), mode: .easeOut),
+                    timed(.scaleY(to: squashY, duration: 0.05), mode: .easeOut)
+                ]),
+                .group([
+                    timed(.scaleX(to: overshoot, duration: destroyed ? 0.09 : 0.06), mode: .easeOut),
+                    timed(.scaleY(to: destroyed ? 0.88 : 0.98, duration: destroyed ? 0.09 : 0.06), mode: .easeOut)
+                ]),
+                settle
+            ]
+        }
+        node.run(.sequence(impactSequence), withKey: "breakableImpact")
+
+        let ring = SKShapeNode(rectOf: snapSize(CGSize(width: tileSize * 0.56, height: tileSize * 0.56)), cornerRadius: 7)
+        ring.position = worldPosition
+        ring.strokeColor = effectColor.withAlphaComponent(0.94)
+        ring.lineWidth = destroyed ? 2.6 : (hitCount == 2 ? 2.2 : 1.6)
+        ring.glowWidth = destroyed ? 6 : (hitCount == 2 ? 4 : 2.5)
+        ring.fillColor = .clear
+        ring.zPosition = 22
+        worldNode.addChild(ring)
+        ring.run(.sequence([
+            .group([
+                timed(.scale(to: ringScale, duration: ringDuration), mode: .easeOut),
+                timed(.fadeOut(withDuration: ringDuration), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+
+        for index in 0..<shardCount {
+            let shard = SKSpriteNode(color: effectColor.withAlphaComponent(destroyed ? 0.96 : 0.78 + intensity * 0.12), size: shardSize)
+            shard.position = worldPosition
+            shard.zPosition = 23
+            shard.blendMode = .add
+            worldNode.addChild(shard)
+            let angle = CGFloat(index) / CGFloat(shardCount) * .pi * 2
+            let wobble = CGFloat((index % 2 == 0 ? 1 : -1)) * 0.12
+            let target = CGPoint(
+                x: worldPosition.x + cos(angle + wobble) * shardDistance,
+                y: worldPosition.y + sin(angle + wobble) * shardDistance
+            )
+            shard.zRotation = angle
+            shard.run(.sequence([
+                .group([
+                    timed(.move(to: target, duration: ringDuration), mode: .easeOut),
+                    timed(.fadeOut(withDuration: ringDuration), mode: .easeOut),
+                    timed(.scale(to: destroyed ? 0.12 : 0.2, duration: ringDuration), mode: .easeOut)
+                ]),
+                .removeFromParent()
+            ]))
+        }
+
+        if hitCount >= 2 {
+            let dust = SKShapeNode(circleOfRadius: destroyed ? tileSize * 0.2 : tileSize * 0.14)
+            dust.position = worldPosition
+            dust.fillColor = SKColor(red: 0.16, green: 0.11, blue: 0.06, alpha: destroyed ? 0.32 : 0.22)
+            dust.strokeColor = .clear
+            dust.zPosition = 21
+            worldNode.addChild(dust)
+            dust.run(.sequence([
+                .group([
+                    timed(.scale(to: destroyed ? 1.9 : 1.45, duration: destroyed ? 0.28 : 0.18), mode: .easeOut),
+                    timed(.fadeOut(withDuration: destroyed ? 0.28 : 0.18), mode: .easeOut)
+                ]),
+                .removeFromParent()
+            ]))
+        }
+    }
+
+    private func toggleSwitchIfNeeded(at point: GridPoint) {
+        guard switchNodes[point] != nil else { return }
+        switchActivated.toggle()
+        SoundFX.playStateChange(on: self, enabled: switchActivated)
+        updateSwitchTriggerVisuals(animated: true)
+        updateSwitchBlockVisuals(animated: true)
+        animateSwitchSignal(from: point)
+        // Avoid full-state hard-bot prewarming here. A switch only flips one boolean,
+        // so invalidating the cache and letting the next route query rebuild lazily
+        // removes the visible hitch on toggle without changing pathing semantics.
+        invalidateHardBotDirectionCacheForDynamicStateChange()
     }
 
     private func directionForArrow(_ char: Character) -> MoveDirection? {
@@ -2209,10 +4181,7 @@ final class GameScene: SKScene {
     }
 
     private func formattedClockTime(_ time: TimeInterval) -> String {
-        let clamped = max(0, time)
-        let minutes = Int(clamped / 60)
-        let seconds = clamped - Double(minutes * 60)
-        return String(format: "%02d:%05.2f", minutes, seconds)
+        formattedTime(time)
     }
 
     private var isChallengeMode: Bool {
@@ -2262,10 +4231,15 @@ final class GameScene: SKScene {
         elapsedTime + addedOverviewPenalty
     }
 
+    private func currentChallengeTimeLimit() -> TimeInterval? {
+        guard let challengeDuration else { return nil }
+        return challengeDuration.seconds + challengeBonusTime
+    }
+
     private func updateTimerLabel() {
         let text: String
-        if let challengeDuration {
-            let remaining = max(0, challengeDuration.seconds - displayedElapsedTime())
+        if let challengeLimit = currentChallengeTimeLimit() {
+            let remaining = max(0, challengeLimit - displayedElapsedTime())
             text = formattedClockTime(remaining)
         } else {
             text = formattedClockTime(displayedElapsedTime())
@@ -2404,15 +4378,97 @@ final class GameScene: SKScene {
     }
 
     private func isWalkable(_ row: Int, _ col: Int) -> Bool {
-        guard let tile = tileAt(GridPoint(row: row, col: col)) else { return false }
+        let point = GridPoint(row: row, col: col)
+        guard let tile = tileAt(point) else { return false }
         if tile == "#" { return false }
-        if tile == "D" && !doorsAreUnlocked { return false }
+        if movingBlockOccupiedTiles.contains(point) { return false }
+        if tile == "E" && exitRequiresKey && !exitIsUnlocked { return false }
+        if tile == "X" && !switchActivated { return false }
+        if tile == "B" && !isBreakableDestroyed(at: point) { return false }
         if tile == "G" && !gateIsOpen { return false }
         return true
     }
 
+    private func canAttemptMove(into point: GridPoint) -> Bool {
+        if isWalkable(point.row, point.col) {
+            return true
+        }
+        return canHitBreakable(at: point)
+    }
+
     private func tileAt(_ point: GridPoint) -> Character? {
         currentMaze?.tile(at: point)
+    }
+
+    private func canHitBreakable(at point: GridPoint) -> Bool {
+        guard tileAt(point) == "B" else { return false }
+        return (breakableHits[point] ?? 0) < 3
+    }
+
+    private func isBreakableDestroyed(at point: GridPoint) -> Bool {
+        (breakableHits[point] ?? 0) >= 3
+    }
+
+    private func breakHitsVector() -> [UInt8] {
+        orderedBreakablePoints.map { UInt8(min(3, breakableHits[$0] ?? 0)) }
+    }
+
+    private func routeHintCanTraverse(_ point: GridPoint) -> Bool {
+        guard let tile = tileAt(point) else { return false }
+        if tile == "#" { return false }
+        if tile == "X" && !switchActivated { return false }
+        if tile == "B" && !isBreakableDestroyed(at: point) { return false }
+        if tile == "G" && !gateIsOpen { return false }
+        return true
+    }
+
+    private func routeHintAdvance(from point: GridPoint, direction: MoveDirection) -> RouteHintStep? {
+        let next = point.moved(by: direction)
+        guard routeHintCanTraverse(next) else { return nil }
+        if let teleported = teleporterMap[next], routeHintCanTraverse(teleported) {
+            return RouteHintStep(destination: teleported, touchedPoints: [next, teleported])
+        }
+        return RouteHintStep(destination: next, touchedPoints: [next])
+    }
+
+    private func routeHintDirections(from point: GridPoint) -> [MoveDirection] {
+        if let forced = oneWayDirections[point], routeHintAdvance(from: point, direction: forced) != nil {
+            return [forced]
+        }
+        return MoveDirection.allCases.filter { routeHintAdvance(from: point, direction: $0) != nil }
+    }
+
+    private func shortestRouteHintPath(from start: GridPoint, to goal: GridPoint) -> [GridPoint]? {
+        guard start != goal else { return [start] }
+
+        var queue: [GridPoint] = [start]
+        var visited = Set<GridPoint>([start])
+        var previous: [GridPoint: GridPoint] = [:]
+        var index = 0
+
+        while index < queue.count {
+            let point = queue[index]
+            index += 1
+
+            for direction in routeHintDirections(from: point) {
+                guard let step = routeHintAdvance(from: point, direction: direction) else { continue }
+                if visited.insert(step.destination).inserted {
+                    previous[step.destination] = point
+                    if step.destination == goal {
+                        var path: [GridPoint] = [goal]
+                        var cursor = goal
+                        while let parent = previous[cursor] {
+                            path.append(parent)
+                            cursor = parent
+                        }
+                        return path.reversed()
+                    }
+                    queue.append(step.destination)
+                }
+            }
+        }
+
+        return nil
     }
 
     private func neighborCount(_ row: Int, _ col: Int) -> Int {
@@ -2448,7 +4504,7 @@ final class GameScene: SKScene {
 
     private func validTurn(fromTile tile: GridPoint, direction: MoveDirection) -> Bool {
         let next = tile.moved(by: direction)
-        return isWalkable(next.row, next.col)
+        return canAttemptMove(into: next)
     }
 
     private func shouldTurn(atTile tile: GridPoint, queuedDirection: MoveDirection) -> Bool {
@@ -2670,8 +4726,15 @@ final class GameScene: SKScene {
 
     private func beginPlayingIfNeeded() {
         let now = CACurrentMediaTime()
-        dismissSwipeHintIfNeeded(markShown: true)
+        dismissSwipeHintIfNeeded(markShown: !isChallengeMode)
         if currentGameState == .idle {
+            if isChallengeMode, runStartTime == nil {
+                mazeMechanicStartTime = now
+                chaserStartAt = now + chaserStartDelay
+                chaserNextStepTime = chaserStartAt
+                chaserNextRepathTime = chaserStartAt
+                updateMovingBlocks(now: now)
+            }
             setGameState(.playing)
             lastTimerUpdate = now
         }
@@ -2727,8 +4790,18 @@ final class GameScene: SKScene {
 
         let next = playerGrid.moved(by: directionToUse)
         guard isWalkable(next.row, next.col) else {
+            if registerBreakableHit(at: next, triggeredByBot: false) {
+                stopSliding(reason: .breakableHit)
+                return
+            }
             let tile = tileAt(next)
-            if tile == "G" || (tile == "D" && !doorsAreUnlocked) {
+            if movingBlockOccupiedTiles.contains(next) {
+                SoundFX.playBlocked(on: self)
+                stopSliding(reason: .manual)
+            } else if tile == "E" && exitRequiresKey && !exitIsUnlocked {
+                pulseLockedExit()
+                stopSliding(reason: .manual)
+            } else if tile == "G" {
                 stopSliding(reason: .manual)
             } else {
                 stopSliding(reason: .wallHit)
@@ -2752,6 +4825,14 @@ final class GameScene: SKScene {
 
     private func handleArrival(at point: GridPoint) {
         let landing = processLanding(at: point)
+        playerPathHistory.append(landing.point)
+        if playerPathHistory.count > 160 {
+            playerPathHistory.removeFirst(playerPathHistory.count - 160)
+        }
+        if chaserNode != nil, currentMaze?.chaserSpawn != nil, landing.point == chaserGrid {
+            handleChaserCaughtPlayer()
+            return
+        }
         let arrivalTime = CACurrentMediaTime()
         if currentGameState == .playing,
            let queuedDirection = queuedDirection,
@@ -2955,7 +5036,7 @@ final class GameScene: SKScene {
             y: CGFloat.random(in: -tileSize * driftMultiplier...tileSize * driftMultiplier)
         )
         let fadeDuration: TimeInterval = extraBurst ? 0.28 : 0.2
-        let scaleUp: CGFloat = style == .pulseTrail || style == .energyBurst ? 1.18 : 1.05
+        let scaleUp: CGFloat = style == .pulseTrail || style == .energyBurst || style == .phaseStream ? 1.18 : 1.05
         particle.run(.sequence([
             .group([
                 .moveBy(x: drift.x, y: drift.y, duration: fadeDuration),
@@ -2972,7 +5053,7 @@ final class GameScene: SKScene {
     private func emitTrailComboBurst(rating: TurnRating, at position: CGPoint) {
         let style = CosmeticsStore.shared.selectedTrail
         let burstCount = rating == .perfect ? 6 : 4
-        guard style == .classicNeon || style == .electricSparks || style == .pixelTrail || style == .pulseTrail || style == .energyBurst || style == .orbitTrail || style == .smoothLight else { return }
+        guard style == .classicNeon || style == .electricSparks || style == .pixelTrail || style == .pulseTrail || style == .energyBurst || style == .orbitTrail || style == .smoothLight || style == .phaseStream else { return }
         for _ in 0..<burstCount {
             emitTrailParticle(extraBurst: true, origin: position)
         }
@@ -3049,6 +5130,7 @@ final class GameScene: SKScene {
 
     private enum StopReason {
         case wallHit
+        case breakableHit
         case completed
         case manual
     }
@@ -3423,16 +5505,23 @@ final class GameScene: SKScene {
             passedGate = true
         }
 
-        activateSwitchIfNeeded(at: currentPoint)
+        toggleSwitchIfNeeded(at: currentPoint)
 
         if let keyNode = keyNodes.removeValue(forKey: currentPoint) {
             keyCount += 1
             SoundFX.playUnlock(on: self)
-            keyNode.removeFromParent()
-            updateDoorVisuals()
-            if botDifficulty == .hard {
-                primeHardBotDirectionCache()
+            let keyOrigin = keyNode.position
+            attachCollectedKeyFollower(from: keyNode)
+            updateExitLockVisuals(animated: true)
+            if let exitMarkerNode {
+                spawnKeyUnlockLink(from: keyOrigin, to: exitMarkerNode.position)
             }
+            showRouteHintToExit(from: currentPoint, duration: 2.5)
+            invalidateHardBotDirectionCacheForDynamicStateChange()
+        }
+
+        if let bonusNode = timeBonusNodes.removeValue(forKey: currentPoint) {
+            grantChallengeTimeBonus(from: bonusNode, at: currentPoint)
         }
 
         if let orb = orbNodes.removeValue(forKey: currentPoint) {
@@ -3463,15 +5552,15 @@ final class GameScene: SKScene {
             forced = oneWay
         }
 
-        activateSwitchIfNeeded(at: currentPoint)
+        toggleSwitchIfNeeded(at: currentPoint)
 
         if let keyNode = keyNodes.removeValue(forKey: currentPoint) {
             keyCount += 1
             keyNode.removeFromParent()
-            updateDoorVisuals()
-            if botDifficulty == .hard {
-                primeHardBotDirectionCache()
-            }
+            keyFollowerNode?.removeFromParent()
+            keyFollowerNode = nil
+            updateExitLockVisuals(animated: true)
+            invalidateHardBotDirectionCacheForDynamicStateChange()
         }
 
         botGrid = currentPoint
@@ -3484,26 +5573,46 @@ final class GameScene: SKScene {
     }
 
     private func teleportPlayer(to point: GridPoint) {
+        let source = playerNode?.position ?? positionFor(playerGrid)
         playerGrid = point
         let destination = positionFor(point)
         SoundFX.playTeleport(on: self)
+        spawnTeleportWarp(at: source, color: currentTheme.palette.accentPink, scale: 1.0)
         playerNode?.position = destination
         playerNode?.run(.sequence([
-            .scale(to: 0.85, duration: 0.05),
-            .scale(to: 1.0, duration: 0.05)
+            .group([
+                .scale(to: 0.74, duration: 0.05),
+                .fadeAlpha(to: 0.52, duration: 0.05)
+            ]),
+            .group([
+                .scale(to: 1.04, duration: 0.06),
+                .fadeAlpha(to: 1.0, duration: 0.06)
+            ]),
+            .scale(to: 1.0, duration: 0.08)
         ]))
+        spawnTeleportWarp(at: destination, color: currentTheme.palette.accentCyan, scale: 1.05)
         updateCameraPosition(animated: false, targetWorldPosition: destination)
     }
 
     private func teleportBot(to point: GridPoint) {
+        let source = botNode?.position ?? botPositionFor(botGrid)
         botGrid = point
         let destination = botPositionFor(point)
         SoundFX.playTeleport(on: self)
+        spawnTeleportWarp(at: source, color: ArcadeStyle.Color.accentMagenta, scale: 0.9)
         botNode?.position = destination
         botNode?.run(.sequence([
-            .scale(to: 0.82, duration: 0.05),
-            .scale(to: 1.0, duration: 0.05)
+            .group([
+                .scale(to: 0.72, duration: 0.05),
+                .fadeAlpha(to: 0.55, duration: 0.05)
+            ]),
+            .group([
+                .scale(to: 1.03, duration: 0.06),
+                .fadeAlpha(to: 1.0, duration: 0.06)
+            ]),
+            .scale(to: 1.0, duration: 0.08)
         ]))
+        spawnTeleportWarp(at: destination, color: ArcadeStyle.Color.accentCyan, scale: 0.92)
     }
 
     private func collectOrb(at position: CGPoint) {
@@ -3512,16 +5621,539 @@ final class GameScene: SKScene {
             CoinStore.shared.add(1)
             updateCoinHud()
         }
+        spawnOrbCollectBurst(at: position)
         let popSize = snapSize(CGSize(width: tileSize * 0.4, height: tileSize * 0.4))
         let pop = SKSpriteNode(texture: TextureFactory.shared.orbTexture(size: popSize))
         pop.position = position
-        pop.alpha = 0.6
+        pop.alpha = 0.78
         pop.zPosition = 25
+        pop.blendMode = .add
         worldNode.addChild(pop)
         pop.run(.sequence([
-            .fadeOut(withDuration: 0.2),
+            .group([
+                .fadeOut(withDuration: 0.22),
+                .scale(to: 1.26, duration: 0.22)
+            ]),
             .removeFromParent()
         ]))
+    }
+
+    private func challengeTimeBonusPerPickup() -> TimeInterval {
+        guard let duration = challengeDuration else { return 0 }
+        switch duration {
+        case .oneMinute:
+            return 5
+        case .twoMinutes:
+            return 6
+        case .threeMinutes:
+            return 7
+        }
+    }
+
+    private func grantChallengeTimeBonus(from node: SKNode, at point: GridPoint) {
+        let bonusSeconds = challengeTimeBonusPerPickup()
+        guard bonusSeconds > 0 else { return }
+
+        challengeBonusTime += bonusSeconds
+        SoundFX.playReward(on: self)
+
+        let pickupPosition = node.position
+        node.removeFromParent()
+        spawnTimeBonusPickupBurst(at: pickupPosition)
+        showChallengeTimeBonusFeedback(at: pickupPosition, seconds: bonusSeconds)
+        updateTimerLabel()
+        pulseChallengeTimerBonus()
+
+        if point == playerGrid {
+            updateCameraPosition(animated: false)
+        }
+    }
+
+    private func showChallengeTimeBonusFeedback(at position: CGPoint, seconds: TimeInterval) {
+        let worldLabel = SKLabelNode(fontNamed: ArcadeFont.digits)
+        worldLabel.text = String(format: "TIME +%.0fs", seconds)
+        worldLabel.fontSize = 22
+        worldLabel.fontColor = ArcadeStyle.Color.accentYellow
+        worldLabel.alpha = 0
+        worldLabel.zPosition = 30
+        worldLabel.position = snap(position)
+        let worldShadow = SKLabelNode(fontNamed: ArcadeFont.digits)
+        worldShadow.text = worldLabel.text
+        worldShadow.fontSize = worldLabel.fontSize
+        worldShadow.fontColor = .black
+        worldShadow.alpha = 0.34
+        worldShadow.position = snap(CGPoint(x: 1, y: -1))
+        worldShadow.zPosition = 29
+        worldLabel.addChild(worldShadow)
+        worldNode.addChild(worldLabel)
+
+        worldLabel.run(.sequence([
+            .group([
+                .fadeIn(withDuration: 0.04),
+                .scale(to: 1.08, duration: 0.08)
+            ]),
+            .group([
+                timed(.moveBy(x: 0, y: tileSize * 0.56, duration: 0.7), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.7), mode: .easeOut),
+                timed(.scale(to: 1.0, duration: 0.7), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+
+        guard let timerCard else { return }
+        let chip = SKSpriteNode(texture: TextureFactory.shared.cardTexture(size: snapSize(CGSize(width: 92, height: 28)), style: .shellFeature))
+        chip.size = snapSize(CGSize(width: 92, height: 28))
+        chip.alpha = 0
+        chip.zPosition = 219
+        chip.position = snap(CGPoint(
+            x: timerCard.position.x + timerCard.size.width / 2 - 42,
+            y: timerCard.position.y + timerCard.size.height / 2 + 14
+        ))
+        hudNode.addChild(chip)
+
+        let hudLabel = SKLabelNode(fontNamed: ArcadeFont.digits)
+        hudLabel.text = String(format: "+%.0fs", seconds)
+        hudLabel.fontSize = 14
+        hudLabel.fontColor = ArcadeStyle.Color.accentYellow
+        hudLabel.verticalAlignmentMode = .center
+        hudLabel.position = snap(CGPoint(x: 0, y: -1))
+        hudLabel.zPosition = 220
+        chip.addChild(hudLabel)
+
+        chip.run(.sequence([
+            .group([
+                timed(.fadeIn(withDuration: 0.05), mode: .easeOut),
+                timed(.scale(to: 1.05, duration: 0.08), mode: .easeOut)
+            ]),
+            .group([
+                timed(.moveBy(x: 0, y: 15, duration: 0.7), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.7), mode: .easeOut),
+                timed(.scale(to: 1.0, duration: 0.7), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func pulseChallengeTimerBonus() {
+        guard let timerCard else { return }
+        timerCard.removeAction(forKey: "timeBonusPulse")
+        timerCard.run(.sequence([
+            .group([
+                timed(.scale(to: 1.065, duration: 0.08), mode: .easeOut),
+                timed(.colorize(with: ArcadeStyle.Color.accentYellow, colorBlendFactor: 0.32, duration: 0.08), mode: .easeOut)
+            ]),
+            .group([
+                timed(.moveBy(x: -2, y: 0, duration: 0.03), mode: .easeOut),
+                timed(.scale(to: 1.02, duration: 0.03), mode: .easeOut)
+            ]),
+            .group([
+                timed(.moveBy(x: 4, y: 0, duration: 0.05), mode: .easeOut),
+                timed(.scale(to: 1.04, duration: 0.05), mode: .easeOut)
+            ]),
+            .group([
+                timed(.moveBy(x: -2, y: 0, duration: 0.04), mode: .easeOut),
+                timed(.scale(to: 1.0, duration: 0.18), mode: .easeOut),
+                timed(.colorize(withColorBlendFactor: 0.0, duration: 0.18), mode: .easeOut)
+            ])
+        ]), withKey: "timeBonusPulse")
+    }
+
+    private func spawnTimeBonusPickupBurst(at position: CGPoint) {
+        let ring = SKShapeNode(circleOfRadius: tileSize * 0.16)
+        ring.lineWidth = 2.4
+        ring.strokeColor = ArcadeStyle.Color.accentYellow
+        ring.glowWidth = 7
+        ring.fillColor = .clear
+        ring.position = position
+        ring.alpha = 0.92
+        ring.zPosition = 26
+        worldNode.addChild(ring)
+
+        ring.run(.sequence([
+            .group([
+                timed(.scale(to: 2.8, duration: 0.28), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.28), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+
+        let flash = SKShapeNode(circleOfRadius: tileSize * 0.18)
+        flash.fillColor = ArcadeStyle.Color.accentYellow.withAlphaComponent(0.92)
+        flash.strokeColor = .clear
+        flash.glowWidth = 10
+        flash.position = position
+        flash.alpha = 0.0
+        flash.zPosition = 25.5
+        worldNode.addChild(flash)
+        flash.run(.sequence([
+            .group([
+                timed(.fadeAlpha(to: 0.8, duration: 0.04), mode: .easeOut),
+                timed(.scale(to: 0.9, duration: 0.04), mode: .easeOut)
+            ]),
+            .group([
+                timed(.fadeOut(withDuration: 0.2), mode: .easeOut),
+                timed(.scale(to: 1.35, duration: 0.2), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func runLevelStartEntrance(startMarker: SKSpriteNode, exitMarker: SKSpriteNode) {
+        let hudEntrants: [SKNode] = [topHudBar, starsCard, centerHudPanel, timerCard, pauseButton, coinChipNode].compactMap { $0 }
+        for (index, node) in hudEntrants.enumerated() {
+            animateEntrance(node, delay: Double(index) * 0.03, offsetY: 10, scaleFrom: 0.985)
+        }
+
+        let worldEntrants: [SKNode] = [startMarker, exitMarker, playerNode].compactMap { $0 }
+        for (index, node) in worldEntrants.enumerated() {
+            animateEntrance(node, delay: 0.04 + Double(index) * 0.04, offsetY: 8, scaleFrom: 0.92)
+        }
+    }
+
+    private func animateEntrance(_ node: SKNode, delay: TimeInterval, offsetY: CGFloat, scaleFrom: CGFloat) {
+        let targetPosition = node.position
+        let targetAlpha = node.alpha
+        node.alpha = 0
+        node.position = CGPoint(x: targetPosition.x, y: targetPosition.y + offsetY)
+        node.setScale(scaleFrom)
+        node.run(.sequence([
+            .wait(forDuration: delay),
+            .group([
+                timed(.fadeAlpha(to: targetAlpha, duration: 0.18), mode: .easeOut),
+                timed(.move(to: targetPosition, duration: 0.2), mode: .easeOut),
+                timed(.scale(to: 1.0, duration: 0.2), mode: .easeOut)
+            ])
+        ]), withKey: "entrance")
+    }
+
+    private func spawnOrbCollectBurst(at position: CGPoint) {
+        let ring = SKShapeNode(circleOfRadius: tileSize * 0.14)
+        ring.position = position
+        ring.strokeColor = ArcadeStyle.Color.accentYellow
+        ring.lineWidth = 2
+        ring.glowWidth = 4
+        ring.fillColor = .clear
+        ring.zPosition = 24
+        worldNode.addChild(ring)
+        ring.run(.sequence([
+            .group([
+                timed(.scale(to: 2.0, duration: 0.22), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.22), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+
+        for index in 0..<6 {
+            let particle = SKSpriteNode(texture: TextureFactory.shared.trailParticleTexture(size: CGSize(width: 8, height: 8), style: .classicNeon))
+            particle.position = position
+            particle.alpha = 0.95
+            particle.zPosition = 25
+            particle.blendMode = .add
+            worldNode.addChild(particle)
+            let angle = CGFloat(index) / 6 * .pi * 2
+            let distance = tileSize * 0.34
+            let target = CGPoint(x: position.x + cos(angle) * distance, y: position.y + sin(angle) * distance)
+            particle.run(.sequence([
+                .group([
+                    timed(.move(to: target, duration: 0.24), mode: .easeOut),
+                    timed(.fadeOut(withDuration: 0.24), mode: .easeOut),
+                    timed(.scale(to: 0.2, duration: 0.24), mode: .easeOut)
+                ]),
+                .removeFromParent()
+            ]))
+        }
+    }
+
+    private func spawnTeleportWarp(at position: CGPoint, color: SKColor, scale: CGFloat) {
+        let ring = SKShapeNode(circleOfRadius: tileSize * 0.16 * scale)
+        ring.position = position
+        ring.strokeColor = color.withAlphaComponent(0.95)
+        ring.lineWidth = 2.5
+        ring.glowWidth = 6
+        ring.fillColor = color.withAlphaComponent(0.05)
+        ring.zPosition = 26
+        worldNode.addChild(ring)
+        ring.run(.sequence([
+            .group([
+                timed(.scale(to: 2.1, duration: 0.18), mode: .easeOut),
+                timed(.fadeOut(withDuration: 0.18), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+
+        let flash = SKSpriteNode(color: color.withAlphaComponent(0.18), size: CGSize(width: tileSize * 0.9, height: tileSize * 0.9))
+        flash.position = position
+        flash.blendMode = .add
+        flash.zPosition = 25
+        worldNode.addChild(flash)
+        flash.run(.sequence([
+            .group([
+                timed(.fadeOut(withDuration: 0.16), mode: .easeOut),
+                timed(.scale(to: 1.3, duration: 0.16), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func spawnExitActivationWave(unlocked: Bool) {
+        guard let exitMarkerNode else { return }
+        let color = unlocked ? ArcadeStyle.Color.accentGreen : SKColor(red: 1.0, green: 0.45, blue: 0.3, alpha: 1.0)
+        let ring = SKShapeNode(circleOfRadius: tileSize * 0.18)
+        ring.position = exitMarkerNode.position
+        ring.strokeColor = color.withAlphaComponent(0.95)
+        ring.lineWidth = 2.2
+        ring.glowWidth = 7
+        ring.fillColor = .clear
+        ring.zPosition = 7
+        worldNode.addChild(ring)
+        ring.run(.sequence([
+            .group([
+                timed(.scale(to: unlocked ? 2.4 : 1.7, duration: unlocked ? 0.24 : 0.18), mode: .easeOut),
+                timed(.fadeOut(withDuration: unlocked ? 0.24 : 0.18), mode: .easeOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func animateSwitchSignal(from point: GridPoint) {
+        guard let originNode = switchNodes[point] else { return }
+        originNode.run(.sequence([
+            .group([
+                timed(.scale(to: 1.08, duration: 0.08), mode: .easeOut),
+                timed(.fadeAlpha(to: 1.0, duration: 0.08), mode: .easeOut)
+            ]),
+            timed(.scale(to: 1.0, duration: 0.14), mode: .easeInEaseOut)
+        ]), withKey: "switchPress")
+
+        let origin = originNode.position
+        for (index, point) in orderedSwitchBlockPoints.enumerated() {
+            guard let blockNode = switchBlockNodes[point] else { continue }
+            let destination = blockNode.position
+            let path = CGMutablePath()
+            path.move(to: origin)
+            let control = CGPoint(x: (origin.x + destination.x) * 0.5, y: max(origin.y, destination.y) + tileSize * 0.18)
+            path.addQuadCurve(to: destination, control: control)
+            let beam = SKShapeNode(path: path)
+            beam.strokeColor = (switchActivated ? ArcadeStyle.Color.accentYellow : ArcadeStyle.Color.accentMagenta).withAlphaComponent(0.62)
+            beam.lineWidth = 2.0
+            beam.glowWidth = 5
+            beam.alpha = 0
+            beam.zPosition = 23
+            worldNode.addChild(beam)
+            beam.run(.sequence([
+                .wait(forDuration: Double(index) * 0.03),
+                .fadeAlpha(to: 0.92, duration: 0.06),
+                .fadeOut(withDuration: 0.16),
+                .removeFromParent()
+            ]))
+
+            let pulse = SKSpriteNode(color: switchActivated ? ArcadeStyle.Color.accentCyan : ArcadeStyle.Color.accentMagenta, size: CGSize(width: 8, height: 8))
+            pulse.position = origin
+            pulse.alpha = 0.88
+            pulse.zPosition = 24
+            pulse.blendMode = .add
+            worldNode.addChild(pulse)
+
+            pulse.run(.sequence([
+                .wait(forDuration: Double(index) * 0.03),
+                .group([
+                    timed(.move(to: destination, duration: 0.18), mode: .easeInEaseOut),
+                    timed(.fadeOut(withDuration: 0.18), mode: .easeInEaseOut),
+                    timed(.scale(to: 0.22, duration: 0.18), mode: .easeInEaseOut)
+                ]),
+                .removeFromParent()
+            ]))
+
+            blockNode.run(.sequence([
+                .wait(forDuration: 0.14 + Double(index) * 0.03),
+                .group([
+                    timed(.scale(to: 1.06, duration: 0.08), mode: .easeOut),
+                    timed(.fadeAlpha(to: 1.0, duration: 0.08), mode: .easeOut)
+                ]),
+                timed(.scale(to: 1.0, duration: 0.16), mode: .easeInEaseOut)
+            ]), withKey: "switchSignalPulse")
+        }
+    }
+
+    private func spawnKeyUnlockLink(from source: CGPoint, to destination: CGPoint) {
+        let path = CGMutablePath()
+        path.move(to: source)
+        let control = CGPoint(x: (source.x + destination.x) * 0.5, y: max(source.y, destination.y) + tileSize * 0.34)
+        path.addQuadCurve(to: destination, control: control)
+
+        let beam = SKShapeNode(path: path)
+        beam.strokeColor = ArcadeStyle.Color.accentYellow.withAlphaComponent(0.92)
+        beam.lineWidth = 2.2
+        beam.glowWidth = 8
+        beam.fillColor = .clear
+        beam.zPosition = 24
+        worldNode.addChild(beam)
+        beam.run(.sequence([
+            .fadeOut(withDuration: 0.28),
+            .removeFromParent()
+        ]))
+
+        let pulse = SKSpriteNode(color: ArcadeStyle.Color.accentYellow, size: CGSize(width: 10, height: 10))
+        pulse.position = source
+        pulse.alpha = 0.94
+        pulse.blendMode = .add
+        pulse.zPosition = 25
+        worldNode.addChild(pulse)
+        pulse.run(.sequence([
+            .group([
+                timed(.move(to: destination, duration: 0.22), mode: .easeInEaseOut),
+                timed(.fadeOut(withDuration: 0.22), mode: .easeInEaseOut),
+                timed(.scale(to: 0.24, duration: 0.22), mode: .easeInEaseOut)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func showRouteHintToExit(from start: GridPoint, duration: TimeInterval) {
+        routeHintNode?.removeAllActions()
+        routeHintNode?.removeFromParent()
+        routeHintNode = nil
+
+        guard let maze = currentMaze,
+              let path = shortestRouteHintPath(from: start, to: maze.exit),
+              path.count > 1 else { return }
+
+        let container = SKNode()
+        container.zPosition = 18
+        worldNode.addChild(container)
+        routeHintNode = container
+        let hintColor = SKColor(red: 1.0, green: 0.81, blue: 0.2, alpha: 1.0)
+        let hintHighlightColor = SKColor(red: 1.0, green: 0.92, blue: 0.56, alpha: 1.0)
+
+        let curve = CGMutablePath()
+        curve.move(to: positionFor(path[0]))
+        for point in path.dropFirst() {
+            curve.addLine(to: positionFor(point))
+        }
+
+        let baseLine = SKShapeNode(path: curve)
+        baseLine.strokeColor = hintColor.withAlphaComponent(0.58)
+        baseLine.lineWidth = max(3.0, tileSize * 0.1)
+        baseLine.lineCap = .round
+        baseLine.lineJoin = .round
+        baseLine.glowWidth = 5
+        baseLine.alpha = 0.0
+        container.addChild(baseLine)
+
+        let dustCount = min(18, max(8, path.count * 2))
+        for index in 0..<dustCount {
+            let particle = SKShapeNode(circleOfRadius: max(1.8, tileSize * 0.045))
+            let ratio = CGFloat(index) / CGFloat(max(1, dustCount - 1))
+            let sampleIndex = min(path.count - 1, Int(round(ratio * CGFloat(path.count - 1))))
+            let basePosition = positionFor(path[sampleIndex])
+            let jitterX = CGFloat.random(in: -tileSize * 0.08...tileSize * 0.08)
+            let jitterY = CGFloat.random(in: -tileSize * 0.08...tileSize * 0.08)
+            particle.position = snap(CGPoint(x: basePosition.x + jitterX, y: basePosition.y + jitterY))
+            particle.fillColor = hintColor.withAlphaComponent(0.84)
+            particle.strokeColor = hintHighlightColor.withAlphaComponent(0.46)
+            particle.lineWidth = 0.5
+            particle.glowWidth = 3
+            particle.alpha = 0.0
+            container.addChild(particle)
+
+            let pulseDelay = Double(index) * 0.035
+            particle.run(.repeatForever(.sequence([
+                .wait(forDuration: pulseDelay),
+                .group([
+                    timed(.fadeAlpha(to: 0.62, duration: 0.18), mode: .easeOut),
+                    timed(.scale(to: 1.28, duration: 0.18), mode: .easeOut)
+                ]),
+                .group([
+                    timed(.fadeAlpha(to: 0.18, duration: 0.24), mode: .easeInEaseOut),
+                    timed(.scale(to: 0.88, duration: 0.24), mode: .easeInEaseOut)
+                ])
+            ])), withKey: "hintDust_\(index)")
+        }
+
+        let fadeIn = SKAction.group([
+            timed(.fadeAlpha(to: 0.86, duration: 0.16), mode: .easeOut),
+            timed(.scale(to: 1.0, duration: 0.16), mode: .easeOut)
+        ])
+        let hold = SKAction.wait(forDuration: max(0.8, duration - 0.44))
+        let fadeOut = SKAction.group([
+            timed(.fadeOut(withDuration: 0.28), mode: .easeInEaseOut),
+            timed(.scale(to: 1.04, duration: 0.28), mode: .easeInEaseOut)
+        ])
+        container.alpha = 0.0
+        container.setScale(0.98)
+        container.run(.sequence([
+            fadeIn,
+            hold,
+            fadeOut,
+            .run { [weak self, weak container] in
+                container?.removeFromParent()
+                if self?.routeHintNode === container {
+                    self?.routeHintNode = nil
+                }
+            }
+        ]), withKey: "routeHintLife")
+    }
+
+    private func tintedTexture(from texture: SKTexture, assetName: String, color: SKColor) -> SKTexture {
+        #if os(iOS) || os(tvOS)
+        guard let image = UIImage(named: assetName)?.cgImage else {
+            return texture
+        }
+        let width = image.width
+        let height = image.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return texture
+        }
+
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: 1, y: -1)
+        context.clip(to: rect, mask: image)
+        context.setFillColor(color.cgColor)
+        context.fill(rect)
+
+        guard let tinted = context.makeImage() else {
+            return texture
+        }
+        return SKTexture(cgImage: tinted)
+        #else
+        return texture
+        #endif
+    }
+
+    private func mixedColor(_ a: SKColor, _ b: SKColor, ratio: CGFloat) -> SKColor {
+        let clamped = max(0, min(1, ratio))
+        let inverse = 1 - clamped
+        var ar: CGFloat = 0
+        var ag: CGFloat = 0
+        var ab: CGFloat = 0
+        var aa: CGFloat = 0
+        var br: CGFloat = 0
+        var bg: CGFloat = 0
+        var bb: CGFloat = 0
+        var ba: CGFloat = 0
+        a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
+        b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return SKColor(
+            red: ar * inverse + br * clamped,
+            green: ag * inverse + bg * clamped,
+            blue: ab * inverse + bb * clamped,
+            alpha: aa * inverse + ba * clamped
+        )
+    }
+
+    private func timed(_ action: SKAction, mode: SKActionTimingMode) -> SKAction {
+        action.timingMode = mode
+        return action
     }
 
     private func completeLevel() {
@@ -3551,10 +6183,21 @@ final class GameScene: SKScene {
         timerLabel.text = formattedClockTime(finalTime)
 
         let stars = starsForTime(finalTime)
-        ProgressStore.shared.update(levelId: levelDefinition.id, time: finalTime, stars: stars)
+        let previousBestTime = ProgressStore.shared.progress(for: levelDefinition.id).bestTime
+        let updatedProgress = ProgressStore.shared.update(levelId: levelDefinition.id, time: finalTime, stars: stars)
+        AdService.shared.registerCompletedStoryRun()
         let flowBonus = flowSystem.pointsThisRun * 15
         if flowBonus > 0 {
             score += flowBonus
+        }
+        if let bestTime = updatedProgress.bestTime,
+           previousBestTime == nil || bestTime < (previousBestTime ?? .greatestFiniteMagnitude) {
+            let scope = LeaderboardScope.storyLevel(levelDefinition.id)
+            let leaderboardScore = leaderboardScoreForStoryTime(bestTime)
+            LeaderboardProfileStore.shared.registerNewLocalBest(scope: scope, score: leaderboardScore)
+            Task {
+                await LeaderboardSyncCoordinator.shared.submitPendingScoresIfPossible(for: [scope])
+            }
         }
         let rewardUnlock = CosmeticsStore.shared.unlockStoryRewardIfNeeded(forLevel: levelDefinition.id)
         let showResults = { [weak self] in
@@ -3574,9 +6217,10 @@ final class GameScene: SKScene {
         }
 
         if ThemeUnlocker.isNewUnlock(levelId: levelDefinition.id, starsEarned: stars) {
-            let theme = ThemeUnlocker.theme(for: levelDefinition.id)
-            ThemeProgress.shared.unlock(theme)
-            showThemeUnlock(theme: theme)
+            if let theme = ThemeUnlocker.unlockTheme(for: levelDefinition.id) {
+                ThemeProgress.shared.unlock(theme)
+                showThemeUnlock(theme: theme)
+            }
         }
         let unlockedAchievements = AchievementStore.shared.evaluateLatestUnlocks()
         showAchievementUnlocks(unlockedAchievements)
@@ -3607,43 +6251,57 @@ final class GameScene: SKScene {
         case .player:
             if isDailyMode, let dailyDescriptor {
                 let registration = DailyChallengeStore.shared.registerWin(for: dailyDescriptor, difficulty: botDifficulty, time: finalTime)
-                let bestText = registration.bestTime.map { formattedClockTime($0) } ?? "--:--.--"
+                let bestText = registration.bestTime.map { formattedClockTime($0) } ?? "--.--s"
                 let rewardText: String
+                let rewardAccentColor: SKColor
+                let rewardClaimed: Bool
                 if registration.awardedCoins > 0 {
                     rewardText = "+\(registration.awardedCoins) COINS"
+                    rewardAccentColor = ArcadeStyle.Color.accentYellow
+                    rewardClaimed = false
                     SoundFX.playReward(on: self)
-                    showProgressToast(
-                        title: "DAILY PAYOUT",
-                        detail: "+\(registration.awardedCoins) COINS",
-                        accentColor: ArcadeStyle.Color.accentYellow,
-                        delay: 0.08
-                    )
                 } else {
                     rewardText = "REWARD CLAIMED"
+                    rewardAccentColor = ArcadeStyle.Color.accentCyan
+                    rewardClaimed = true
+                    SoundFX.playWin(on: self)
                 }
-                showResultOverlay(
-                    stars: nil,
-                    headline: "DAILY CLEAR",
-                    timeText: "Your Time: \(formattedClockTime(finalTime))",
-                    detailLines: [
-                        "Mode: Daily Challenge",
-                        "Daily Best: \(bestText)",
-                        registration.isNewBest ? rewardText + " • NEW BEST" : rewardText
-                    ],
-                    nextEnabled: false
-                )
+                let finishPosition = playerNode?.position ?? (currentMaze.map { positionFor($0.exit) } ?? .zero)
+                playEquippedWinAnimation(at: finishPosition) { [weak self] in
+                    guard let self else { return }
+                    self.showDailyResultOverlay(
+                        difficultyText: self.botDifficulty.title.uppercased() + " BOT",
+                        playerTime: self.formattedClockTime(finalTime),
+                        bestTime: bestText,
+                        rewardText: rewardText,
+                        rewardAccentColor: rewardAccentColor,
+                        isNewBest: registration.isNewBest,
+                        rewardClaimed: rewardClaimed
+                    )
+                }
                 return
             }
             let stars = starsForTime(finalTime)
-            ProgressStore.shared.update(levelId: levelDefinition.id, time: finalTime, stars: stars)
+            let previousBestTime = ProgressStore.shared.progress(for: levelDefinition.id).bestTime
+            let updatedProgress = ProgressStore.shared.update(levelId: levelDefinition.id, time: finalTime, stars: stars)
+            AdService.shared.registerCompletedStoryRun()
             let flowBonus = flowSystem.pointsThisRun * 15
             if flowBonus > 0 {
                 score += flowBonus
             }
+            if let bestTime = updatedProgress.bestTime,
+               previousBestTime == nil || bestTime < (previousBestTime ?? .greatestFiniteMagnitude) {
+                let scope = LeaderboardScope.storyLevel(levelDefinition.id)
+                let leaderboardScore = leaderboardScoreForStoryTime(bestTime)
+                LeaderboardProfileStore.shared.registerNewLocalBest(scope: scope, score: leaderboardScore)
+                Task {
+                    await LeaderboardSyncCoordinator.shared.submitPendingScoresIfPossible(for: [scope])
+                }
+            }
             showLevelResultOverlay(time: finalTime, stars: stars, headline: "LEVEL COMPLETE")
         case .bot:
             if isDailyMode, let dailyDescriptor {
-                let bestText = DailyChallengeStore.shared.bestTime(for: dailyDescriptor).map { formattedClockTime($0) } ?? "--:--.--"
+                let bestText = DailyChallengeStore.shared.bestTime(for: dailyDescriptor).map { formattedClockTime($0) } ?? "--.--s"
                 showResultOverlay(
                     stars: nil,
                     headline: "BOT WINS!",
@@ -3742,7 +6400,7 @@ final class GameScene: SKScene {
         SoundFX.playReward(on: self)
         showProgressToast(
             title: "NEW THEME UNLOCKED",
-            detail: "THEME \(theme.rawValue + 1)",
+            detail: theme.displayName,
             accentColor: ArcadeStyle.Color.accentMagenta
         )
     }
@@ -3761,9 +6419,16 @@ final class GameScene: SKScene {
         overlay.position = snap(.zero)
         overlay.zPosition = 9800
         overlay.onContinue = { [weak self, weak overlay] in
-            overlay?.removeFromParent()
-            self?.rewardUnlockOverlay = nil
-            onContinue()
+            guard let overlay else {
+                self?.rewardUnlockOverlay = nil
+                onContinue()
+                return
+            }
+            overlay.animateOut { [weak self, weak overlay] in
+                overlay?.removeFromParent()
+                self?.rewardUnlockOverlay = nil
+                onContinue()
+            }
         }
         rewardUnlockOverlay = overlay
         hudNode.addChild(overlay)
@@ -3845,6 +6510,41 @@ final class GameScene: SKScene {
                 .group([.fadeOut(withDuration: 0.28), .scaleY(to: 0.8, duration: 0.28)]),
                 .removeFromParent()
             ]))
+        case .timeFreezeShatter:
+            totalDuration = 0.52
+            let freeze = SKShapeNode(rectOf: CGSize(width: tileSize * 0.92, height: tileSize * 0.92), cornerRadius: tileSize * 0.16)
+            freeze.strokeColor = SKColor(hex: 0xB8F4FF)
+            freeze.fillColor = SKColor(hex: 0xB8F4FF).withAlphaComponent(0.08)
+            freeze.lineWidth = 2.5
+            freeze.glowWidth = tileSize * 0.16
+            container.addChild(freeze)
+
+            for index in 0..<6 {
+                let shard = SKShapeNode(rectOf: CGSize(width: tileSize * 0.12, height: tileSize * 0.12), cornerRadius: 2)
+                shard.fillColor = SKColor(hex: 0xDFFBFF)
+                shard.strokeColor = .clear
+                shard.alpha = 0.9
+                shard.position = .zero
+                shard.zRotation = CGFloat(index) * (.pi / 6)
+                container.addChild(shard)
+                let angle = CGFloat(index) / 6 * .pi * 2
+                shard.run(.sequence([
+                    .wait(forDuration: 0.18),
+                    .group([
+                        .moveBy(x: cos(angle) * tileSize * 0.52, y: sin(angle) * tileSize * 0.52, duration: 0.28),
+                        .fadeOut(withDuration: 0.28),
+                        .scale(to: 0.2, duration: 0.28)
+                    ]),
+                    .removeFromParent()
+                ]))
+            }
+
+            freeze.run(.sequence([
+                .group([.fadeAlpha(to: 1.0, duration: 0.14), .scale(to: 1.04, duration: 0.14)]),
+                .wait(forDuration: 0.04),
+                .group([.fadeOut(withDuration: 0.34), .scale(to: 1.18, duration: 0.34)]),
+                .removeFromParent()
+            ]))
         }
 
         container.run(.sequence([
@@ -3864,7 +6564,8 @@ final class GameScene: SKScene {
             timeText: "Your Time: \(formattedClockTime(time))",
             detailLines: [],
             requirementRows: starRequirementRows(highlighting: stars),
-            nextEnabled: nextEnabled
+            nextEnabled: nextEnabled,
+            storyLeaderboardLevelId: levelDefinition.id
         )
     }
 
@@ -3874,11 +6575,10 @@ final class GameScene: SKScene {
         timeText: String,
         detailLines: [String],
         requirementRows: [ResultOverlayNode.RequirementRow] = [],
-        nextEnabled: Bool? = nil
+        nextEnabled: Bool? = nil,
+        storyLeaderboardLevelId: Int? = nil
     ) {
-        resultOverlay?.removeFromParent()
-        challengeResultOverlay?.removeFromParent()
-        challengeResultOverlay = nil
+        clearCompletionOverlays()
         rewardUnlockOverlay?.removeFromParent()
         rewardUnlockOverlay = nil
         let safeTop = size.height / 2 - safeAreaInsets.top
@@ -3904,6 +6604,15 @@ final class GameScene: SKScene {
         overlay.onNext = { [weak self] in
             self?.goToNextLevel()
         }
+        if let storyLeaderboardLevelId {
+            overlay.setLeaderboardVisible(true, title: "BEST TIMES")
+            overlay.onLeaderboard = { [weak self] in
+                self?.openStoryLeaderboard(levelId: storyLeaderboardLevelId)
+            }
+        } else {
+            overlay.setLeaderboardVisible(false)
+            overlay.onLeaderboard = nil
+        }
         let hasNextLevel = levelIndex < LevelStore.levels.count - 1
         overlay.setNextEnabled(nextEnabled ?? hasNextLevel)
         resultOverlay = overlay
@@ -3926,9 +6635,7 @@ final class GameScene: SKScene {
     }
 
     private func showChallengeResultOverlay(duration: TimeChallengeDuration, completedMazes: Int, bestMazes: Int, isNewRecord: Bool) {
-        challengeResultOverlay?.removeFromParent()
-        resultOverlay?.removeFromParent()
-        resultOverlay = nil
+        clearCompletionOverlays()
         rewardUnlockOverlay?.removeFromParent()
         rewardUnlockOverlay = nil
         if isNewRecord {
@@ -3957,12 +6664,281 @@ final class GameScene: SKScene {
         hudNode.addChild(overlay)
     }
 
+    private func showDailyResultOverlay(
+        difficultyText: String,
+        playerTime: String,
+        bestTime: String,
+        rewardText: String,
+        rewardAccentColor: SKColor,
+        isNewBest: Bool,
+        rewardClaimed: Bool
+    ) {
+        clearCompletionOverlays()
+        rewardUnlockOverlay?.removeFromParent()
+        rewardUnlockOverlay = nil
+        let safeTop = size.height / 2 - safeAreaInsets.top
+        let safeBottom = -size.height / 2 + safeAreaInsets.bottom
+        let overlay = DailyResultOverlayNode(
+            size: size,
+            safeTop: safeTop,
+            safeBottom: safeBottom,
+            difficultyText: difficultyText,
+            timeText: playerTime,
+            bestText: bestTime,
+            rewardText: rewardText,
+            rewardAccentColor: rewardAccentColor,
+            isNewBest: isNewBest,
+            rewardClaimed: rewardClaimed
+        )
+        overlay.position = snap(.zero)
+        overlay.zPosition = 10000
+        overlay.onRetry = { [weak self] in
+            self?.retryLevel()
+        }
+        overlay.onMenu = { [weak self] in
+            self?.goToLevelSelect()
+        }
+        dailyResultOverlay = overlay
+        hudNode.addChild(overlay)
+    }
+
+    private func clearCompletionOverlays() {
+        storyLeaderboardFetchTask?.cancel()
+        storyLeaderboardFetchTask = nil
+        teardownLeaderboardTextField()
+        leaderboardNameOverlay?.removeFromParent()
+        leaderboardNameOverlay = nil
+        requiresLeaderboardNamePrompt = false
+        pendingStoryLeaderboardLevelId = nil
+        storyLeaderboardOverlay?.removeFromParent()
+        storyLeaderboardOverlay = nil
+        resultOverlay?.removeFromParent()
+        resultOverlay = nil
+        challengeResultOverlay?.removeFromParent()
+        challengeResultOverlay = nil
+        dailyResultOverlay?.removeFromParent()
+        dailyResultOverlay = nil
+    }
+
+    private func openStoryLeaderboard(levelId: Int) {
+        guard storyLeaderboardOverlay == nil else { return }
+        pendingStoryLeaderboardLevelId = levelId
+        let safeTop = size.height / 2 - safeAreaInsets.top
+        let safeBottom = -size.height / 2 + safeAreaInsets.bottom
+        let overlay = StoryLevelLeaderboardOverlayNode(
+            size: size,
+            safeTop: safeTop,
+            safeBottom: safeBottom,
+            levelId: levelId,
+            levelName: levelDefinition.name,
+            playerName: LeaderboardProfileStore.shared.playerName
+        )
+        overlay.position = snap(.zero)
+        overlay.zPosition = 10020
+        overlay.onClose = { [weak self] in
+            self?.dismissStoryLeaderboard()
+        }
+        storyLeaderboardOverlay = overlay
+        hudNode.addChild(overlay)
+        if LeaderboardProfileStore.shared.playerName == nil {
+            presentLeaderboardNamePrompt(required: true)
+        }
+        loadStoryLeaderboard(levelId: levelId)
+    }
+
+    private func dismissStoryLeaderboard(immediate: Bool = false) {
+        storyLeaderboardFetchTask?.cancel()
+        storyLeaderboardFetchTask = nil
+        dismissLeaderboardNamePrompt(immediate: immediate)
+        pendingStoryLeaderboardLevelId = nil
+        guard let overlay = storyLeaderboardOverlay else { return }
+        storyLeaderboardOverlay = nil
+        if immediate {
+            overlay.removeFromParent()
+            return
+        }
+        overlay.animateOut {
+            overlay.removeFromParent()
+        }
+    }
+
+    private func loadStoryLeaderboard(levelId: Int) {
+        guard let overlay = storyLeaderboardOverlay else { return }
+        overlay.updatePlayerName(LeaderboardProfileStore.shared.playerName)
+        overlay.setLoading()
+        storyLeaderboardFetchTask?.cancel()
+        storyLeaderboardFetchTask = Task { [weak self] in
+            do {
+                let entries = try await LeaderboardService.shared.fetchLeaderboard(scope: .storyLevel(levelId))
+                await MainActor.run {
+                    self?.storyLeaderboardOverlay?.setEntries(entries)
+                }
+            } catch {
+                let localizedMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn't load leaderboard."
+                await MainActor.run {
+                    self?.storyLeaderboardOverlay?.setError(localizedMessage)
+                }
+            }
+        }
+    }
+
+    private func presentLeaderboardNamePrompt(required: Bool) {
+        requiresLeaderboardNamePrompt = required
+        guard leaderboardNameOverlay == nil else {
+            layoutLeaderboardTextField()
+            leaderboardTextField?.becomeFirstResponder()
+            return
+        }
+        let safeTop = size.height / 2 - safeAreaInsets.top
+        let safeBottom = -size.height / 2 + safeAreaInsets.bottom
+        let overlay = LeaderboardNamePromptOverlayNode(size: size, safeTop: safeTop, safeBottom: safeBottom)
+        overlay.position = snap(.zero)
+        overlay.zPosition = 10030
+        overlay.onCancel = { [weak self] in
+            self?.cancelLeaderboardNamePrompt()
+        }
+        overlay.onConfirm = { [weak self] in
+            self?.confirmLeaderboardNamePrompt()
+        }
+        leaderboardNameOverlay = overlay
+        hudNode.addChild(overlay)
+        SoundFX.playModalOpen(on: self)
+        setupLeaderboardTextField()
+        leaderboardTextField?.text = LeaderboardProfileStore.shared.playerName
+        overlay.setValidationMessage(nil)
+        updateLeaderboardConfirmState()
+        leaderboardTextField?.becomeFirstResponder()
+    }
+
+    private func dismissLeaderboardNamePrompt(immediate: Bool = false, completion: (() -> Void)? = nil) {
+        teardownLeaderboardTextField()
+        guard let overlay = leaderboardNameOverlay else {
+            completion?()
+            return
+        }
+        leaderboardNameOverlay = nil
+        if immediate {
+            overlay.removeFromParent()
+            completion?()
+            return
+        }
+        SoundFX.playModalClose(on: self)
+        overlay.animateOut {
+            overlay.removeFromParent()
+            completion?()
+        }
+    }
+
+    private func cancelLeaderboardNamePrompt() {
+        let hadName = LeaderboardProfileStore.shared.playerName != nil
+        dismissLeaderboardNamePrompt { [weak self] in
+            guard let self else { return }
+            if self.requiresLeaderboardNamePrompt && !hadName {
+                self.dismissStoryLeaderboard()
+            }
+            self.requiresLeaderboardNamePrompt = false
+        }
+    }
+
+    private func confirmLeaderboardNamePrompt() {
+        guard let rawName = leaderboardTextField?.text,
+              let sanitized = LeaderboardProfileStore.shared.setPlayerName(rawName) else {
+            leaderboardNameOverlay?.setValidationMessage("Enter a valid name.")
+            updateLeaderboardConfirmState()
+            return
+        }
+
+        requiresLeaderboardNamePrompt = false
+        storyLeaderboardOverlay?.updatePlayerName(sanitized)
+        dismissLeaderboardNamePrompt { [weak self] in
+            guard let self else { return }
+            Task {
+                await LeaderboardSyncCoordinator.shared.submitPendingScoresIfPossible()
+            }
+            if let levelId = self.pendingStoryLeaderboardLevelId {
+                self.loadStoryLeaderboard(levelId: levelId)
+            }
+        }
+    }
+
+    #if os(iOS) || os(tvOS)
+    private func setupLeaderboardTextField() {
+        guard leaderboardTextField == nil, let view else { return }
+
+        let field = UITextField(frame: .zero)
+        field.autocapitalizationType = .words
+        field.autocorrectionType = .no
+        field.spellCheckingType = .no
+        field.clearButtonMode = .never
+        field.returnKeyType = .done
+        field.enablesReturnKeyAutomatically = true
+        field.delegate = self
+        field.keyboardAppearance = .dark
+        field.textColor = UIColor.white
+        field.tintColor = UIColor(red: 0.0, green: 0.83, blue: 1.0, alpha: 1.0)
+        field.font = UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
+        field.textAlignment = .center
+        field.placeholder = "YOUR NAME"
+        field.attributedPlaceholder = NSAttributedString(
+            string: "YOUR NAME",
+            attributes: [.foregroundColor: UIColor(white: 0.68, alpha: 1.0)]
+        )
+        field.backgroundColor = .clear
+        field.addTarget(self, action: #selector(handleLeaderboardTextChanged(_:)), for: .editingChanged)
+        view.addSubview(field)
+        leaderboardTextField = field
+        layoutLeaderboardTextField()
+    }
+
+    private func teardownLeaderboardTextField() {
+        leaderboardTextField?.resignFirstResponder()
+        leaderboardTextField?.removeFromSuperview()
+        leaderboardTextField = nil
+    }
+
+    private func layoutLeaderboardTextField() {
+        guard let overlay = leaderboardNameOverlay, let field = leaderboardTextField else { return }
+        let sceneRect = overlay.inputFrame(in: self)
+        field.frame = viewFrame(fromSceneRect: sceneRect).insetBy(dx: 14, dy: 10)
+    }
+
+    private func viewFrame(fromSceneRect rect: CGRect) -> CGRect {
+        guard let view else { return .zero }
+        let topLeft = CGPoint(x: rect.minX, y: rect.maxY)
+        let bottomRight = CGPoint(x: rect.maxX, y: rect.minY)
+        let viewTopLeft = view.convert(topLeft, from: self)
+        let viewBottomRight = view.convert(bottomRight, from: self)
+        return CGRect(
+            x: min(viewTopLeft.x, viewBottomRight.x),
+            y: min(viewTopLeft.y, viewBottomRight.y),
+            width: abs(viewBottomRight.x - viewTopLeft.x),
+            height: abs(viewBottomRight.y - viewTopLeft.y)
+        )
+    }
+
+    @objc private func handleLeaderboardTextChanged(_ textField: UITextField) {
+        updateLeaderboardConfirmState()
+        if let sanitized = LeaderboardProfileStore.shared.sanitize(name: textField.text ?? ""), !sanitized.isEmpty {
+            leaderboardNameOverlay?.setValidationMessage(nil)
+        }
+    }
+    #else
+    private func setupLeaderboardTextField() {}
+    private func teardownLeaderboardTextField() {}
+    private func layoutLeaderboardTextField() {}
+    #endif
+
+    private func updateLeaderboardConfirmState() {
+        let isValid = LeaderboardProfileStore.shared.sanitize(name: leaderboardTextField?.text ?? "") != nil
+        leaderboardNameOverlay?.setConfirmEnabled(isValid)
+    }
+
     private func advanceChallengeRun() {
         guard let challengeDuration else { return }
         let now = CACurrentMediaTime()
         updateTimer(now: now)
         updateTimerLabel()
-        if displayedElapsedTime() >= challengeDuration.seconds {
+        if let challengeLimit = currentChallengeTimeLimit(), displayedElapsedTime() >= challengeLimit {
             finishChallengeRun()
             return
         }
@@ -3992,18 +6968,35 @@ final class GameScene: SKScene {
         playerNode?.removeAllActions()
         playerNode = nil
         worldNode.removeAllChildren()
+        keyFollowerNode = nil
+        routeHintNode = nil
         tileMapNode = nil
         currentMaze = nil
         currentStarBenchmarks = nil
         orbNodes.removeAll()
+        timeBonusNodes.removeAll()
         keyNodes.removeAll()
         switchNodes.removeAll()
-        doorNodes.removeAll()
+        switchBlockNodes.removeAll()
+        orderedSwitchBlockPoints.removeAll()
+        breakableNodes.removeAll()
+        breakableHits.removeAll()
+        orderedBreakablePoints.removeAll()
         gateNodes.removeAll()
         gateTiles.removeAll()
         teleporterNodes.removeAll()
+        movingBlockDefinitions.removeAll()
+        movingBlockTracks.removeAll()
+        movingBlockNodes.removeAll()
+        movingBlockOccupiedTiles.removeAll()
         teleporterMap.removeAll()
         oneWayDirections.removeAll()
+        exitMarkerNode = nil
+        exitGlowNode = nil
+        exitLockNode = nil
+        chaserNode?.removeAllActions()
+        chaserNode?.removeFromParent()
+        chaserNode = nil
         miniMapNode?.removeFromParent()
         miniMapNode = nil
         miniMapTexture = nil
@@ -4015,6 +7008,14 @@ final class GameScene: SKScene {
         keyCount = 0
         switchActivated = false
         gateIsOpen = true
+        playerPathHistory.removeAll()
+        chaserCurrentDirection = nil
+        chaserBehavior = nil
+        chaserIsMoving = false
+        chaserCaughtPlayer = false
+        chaserRevealPlayed = false
+        chaserTargetLockPlayed = false
+        chaserThreatLevel = 0
         setupHUD()
     }
 
@@ -4040,17 +7041,33 @@ final class GameScene: SKScene {
 
         let previousBest = ChallengeStore.shared.best(for: duration)
         let isNewRecord = ChallengeStore.shared.register(duration: duration, completedMazes: challengeCompletedMazes)
+        if isNewRecord {
+            let scope = LeaderboardScope.timeChallenge(duration)
+            LeaderboardProfileStore.shared.registerNewLocalBest(scope: scope, score: challengeCompletedMazes)
+            Task {
+                await LeaderboardSyncCoordinator.shared.submitPendingScoresIfPossible(for: [scope])
+            }
+        }
+        AdService.shared.registerCompletedTimeChallengeRun()
         let best = max(previousBest, challengeCompletedMazes)
         showChallengeResultOverlay(duration: duration, completedMazes: challengeCompletedMazes, bestMazes: best, isNewRecord: isNewRecord)
     }
 
     private func retryLevel() {
+        guard !isTransitioning else { return }
+        if currentGameState == .levelCompleted, isChallengeMode {
+            presentDueInterstitialIfNeeded(for: .timeChallenge) { [weak self] in
+                self?.retryLevelImmediate()
+            }
+            return
+        }
+        retryLevelImmediate()
+    }
+
+    private func retryLevelImmediate() {
         cameraNode.removeAllActions()
         applyGameplayCameraScale()
-        resultOverlay?.removeFromParent()
-        resultOverlay = nil
-        challengeResultOverlay?.removeFromParent()
-        challengeResultOverlay = nil
+        clearCompletionOverlays()
         rewardUnlockOverlay?.removeFromParent()
         rewardUnlockOverlay = nil
         hideTutorialOverlay()
@@ -4058,14 +7075,24 @@ final class GameScene: SKScene {
     }
 
     private func goToNextLevel() {
+        guard !isTransitioning else { return }
         guard !isChallengeMode else {
-            retryLevel()
+            retryLevelImmediate()
             return
         }
+        if currentGameState == .levelCompleted, !isDailyMode {
+            presentDueInterstitialIfNeeded(for: .story) { [weak self] in
+                self?.goToNextLevelImmediate()
+            }
+            return
+        }
+        goToNextLevelImmediate()
+    }
+
+    private func goToNextLevelImmediate() {
         cameraNode.removeAllActions()
         applyGameplayCameraScale()
-        resultOverlay?.removeFromParent()
-        resultOverlay = nil
+        clearCompletionOverlays()
         if levelIndex < LevelStore.levels.count - 1 {
             resetGameAndReloadLevel(targetLevelIndex: levelIndex + 1)
         } else {
@@ -4074,6 +7101,21 @@ final class GameScene: SKScene {
     }
 
     private func goToLevelSelect() {
+        guard !isTransitioning else { return }
+        if currentGameState == .levelCompleted {
+            if isChallengeMode {
+                presentDueInterstitialIfNeeded(for: .timeChallenge) { [weak self] in
+                    self?.transitionToLevelSelect()
+                }
+                return
+            }
+            if !isDailyMode {
+                presentDueInterstitialIfNeeded(for: .story) { [weak self] in
+                    self?.transitionToLevelSelect()
+                }
+                return
+            }
+        }
         transitionToLevelSelect()
     }
 
@@ -4114,7 +7156,7 @@ final class GameScene: SKScene {
     }
 
     private func formattedRequirementTime(_ time: TimeInterval) -> String {
-        String(format: "%.2fs", max(0, time))
+        formattedTime(time)
     }
 
     private func togglePause() {
@@ -4132,28 +7174,68 @@ final class GameScene: SKScene {
         pauseGame()
     }
 
-    private func pendingTutorialMechanic() -> Mechanic? {
+    private func pendingTutorial() -> PendingTutorial? {
         guard !isChallengeMode, !isDailyMode else { return nil }
-        guard let mechanic = introMechanic(for: levelDefinition.id) else { return nil }
-        guard !MechanicTutorialStore.shared.hasShown(mechanic) else { return nil }
-        return mechanic
+        if levelDefinition.id == 1, !StartTutorialStore.shared.hasShown {
+            return .basics
+        }
+
+        let mechanics = levelConfig.enabledMechanics.sorted { tutorialPriority(for: $0) < tutorialPriority(for: $1) }
+        guard let mechanic = mechanics.first(where: { !MechanicTutorialStore.shared.hasShown($0) }) else {
+            return nil
+        }
+        return .mechanic(mechanic)
     }
 
-    private func showTutorialOverlay(for mechanic: Mechanic) {
+    private func showTutorialOverlay(for tutorial: PendingTutorial) {
         tutorialOverlay?.removeFromParent()
         let safeTop = size.height / 2 - safeAreaInsets.top
         let safeBottom = -size.height / 2 + safeAreaInsets.bottom
-        let overlay = MechanicTutorialOverlayNode(size: size, safeTop: safeTop, safeBottom: safeBottom, mechanic: mechanic)
+        let content: MechanicTutorialOverlayNode.Content
+        switch tutorial {
+        case .basics:
+            content = .basics
+        case let .mechanic(mechanic):
+            content = .mechanic(mechanic)
+        }
+        let overlay = MechanicTutorialOverlayNode(size: size, safeTop: safeTop, safeBottom: safeBottom, content: content)
         overlay.position = snap(.zero)
         overlay.zPosition = 9500
         overlay.onContinue = { [weak self, weak overlay] in
             guard let self, let overlay else { return }
             SoundFX.playButtonTap(on: self.hudNode)
-            MechanicTutorialStore.shared.markShown(overlay.mechanic)
+            if let mechanic = overlay.mechanic {
+                MechanicTutorialStore.shared.markShown(mechanic)
+            } else {
+                StartTutorialStore.shared.markShown()
+            }
             self.hideTutorialOverlay()
         }
         tutorialOverlay = overlay
         hudNode.addChild(overlay)
+    }
+
+    private func tutorialPriority(for mechanic: Mechanic) -> Int {
+        switch mechanic {
+        case .oneWay:
+            return 0
+        case .breakableWalls:
+            return 1
+        case .teleporters:
+            return 2
+        case .switchBlocks:
+            return 3
+        case .keysDoors:
+            return 4
+        case .fog:
+            return 5
+        case .timingGates:
+            return 6
+        case .movingBlocks:
+            return 7
+        case .chaserEnemy:
+            return 8
+        }
     }
 
     private func hideTutorialOverlay() {
@@ -4192,10 +7274,11 @@ final class GameScene: SKScene {
             accumulatedPausedTime += now - pausedAt
         }
         pauseStartTime = nil
-        setGameState(.playing)
+        let resumeState: GameState = runStartTime == nil ? .idle : .playing
+        setGameState(resumeState)
         lastTimerUpdate = now
         hidePauseOverlay()
-        if botRaceEnabled, botHasStarted, botFinishTime == nil {
+        if resumeState == .playing, botRaceEnabled, botHasStarted, botFinishTime == nil {
             botIsMoving = true
             stepBotForward()
         }
@@ -4217,8 +7300,11 @@ final class GameScene: SKScene {
     }
 
     private func hidePauseOverlay() {
-        pauseOverlay?.removeFromParent()
+        guard let overlay = pauseOverlay else { return }
         pauseOverlay = nil
+        overlay.animateOut {
+            overlay.removeFromParent()
+        }
     }
 
     private func goToLevelSelectFromPause() {
@@ -4231,6 +7317,7 @@ final class GameScene: SKScene {
 
     private func presentLevelSelect() {
         guard let view = view else { return }
+        SoundFX.playScreenBack(on: self)
         let scene: SKScene
         if isChallengeMode {
             scene = ChallengeSelectScene(size: size)
@@ -4240,7 +7327,7 @@ final class GameScene: SKScene {
             scene = LevelSelectScene(size: size)
         }
         scene.scaleMode = .resizeFill
-        view.presentScene(scene, transition: SKTransition.fade(withDuration: 0.3))
+        view.presentScene(scene, transition: ShellMotion.screenTransition(.backward))
     }
 
     private func transitionToLevelSelect() {
@@ -4250,11 +7337,23 @@ final class GameScene: SKScene {
         hidePauseOverlay()
         rewardUnlockOverlay?.removeFromParent()
         rewardUnlockOverlay = nil
-        resultOverlay?.removeFromParent()
-        resultOverlay = nil
+        clearCompletionOverlays()
         closeOverview()
         cleanupBeforeSceneTransition()
         presentLevelSelect()
+    }
+
+    private func presentDueInterstitialIfNeeded(for context: AdInterstitialContext, completion: @escaping () -> Void) {
+        guard !isTransitioning else { return }
+        isTransitioning = true
+        activeButton?.setPressed(false)
+        activeButton = nil
+        let presenter = view?.window?.rootViewController
+        AdService.shared.presentInterstitialIfDue(for: context, from: presenter) { [weak self] in
+            guard let self else { return }
+            self.isTransitioning = false
+            completion()
+        }
     }
 
     private func cleanupBeforeSceneTransition() {
@@ -4275,25 +7374,38 @@ final class GameScene: SKScene {
         playerNode = nil
         botNode?.removeAllActions()
         botNode = nil
+        chaserNode?.removeAllActions()
+        chaserNode = nil
         tileMapNode = nil
         currentMaze = nil
         currentStarBenchmarks = nil
         isMoving = false
         botIsMoving = false
+        chaserIsMoving = false
         botHasStarted = false
         botCurrentDirection = nil
         botForcedDirection = nil
         botFinishTime = nil
+        chaserCurrentDirection = nil
+        chaserBehavior = nil
+        chaserCaughtPlayer = false
         easyBotLoopTracker = MazeSolvability.EasyBotLoopTracker()
         queuedDirection = nil
         queuedTimestamp = nil
         currentDirection = nil
         forcedDirection = nil
+        keyFollowerNode?.removeFromParent()
+        keyFollowerNode = nil
+        routeHintNode?.removeAllActions()
+        routeHintNode?.removeFromParent()
+        routeHintNode = nil
+        timeBonusNodes.values.forEach { $0.removeFromParent() }
+        timeBonusNodes.removeAll()
+        challengeBonusTime = 0
         isInOverviewMode = false
         overviewOverlay?.removeFromParent()
         overviewOverlay = nil
-        challengeResultOverlay?.removeFromParent()
-        challengeResultOverlay = nil
+        clearCompletionOverlays()
         tutorialOverlay?.removeFromParent()
         tutorialOverlay = nil
         rewardUnlockOverlay?.removeFromParent()
@@ -4304,6 +7416,11 @@ final class GameScene: SKScene {
         miniMapNode = nil
         swipeHintLabel?.removeFromParent()
         swipeHintLabel = nil
+        playerPathHistory.removeAll()
+        movingBlockDefinitions.removeAll()
+        movingBlockTracks.removeAll()
+        movingBlockNodes.removeAll()
+        movingBlockOccupiedTiles.removeAll()
         worldNode.removeAllChildren()
         hudNode.removeAllChildren()
     }
@@ -4312,9 +7429,10 @@ final class GameScene: SKScene {
         guard let view = view else { return }
         let nextIndex = levelIndex + 1
         if nextIndex < LevelStore.levels.count {
+            SoundFX.playScreenAdvance(on: self)
             let scene = GameScene(size: size, levelIndex: nextIndex)
             scene.scaleMode = .resizeFill
-            view.presentScene(scene, transition: SKTransition.fade(withDuration: 0.3))
+            view.presentScene(scene, transition: ShellMotion.screenTransition(.forward))
         } else {
             presentLevelSelect()
         }
@@ -4331,8 +7449,7 @@ final class GameScene: SKScene {
         challengePrefetchToken += 1
         autoPausedForLifecycle = false
         if let targetIndex = targetLevelIndex, targetIndex != levelIndex, !isChallengeMode {
-            resultOverlay?.removeFromParent()
-            resultOverlay = nil
+            clearCompletionOverlays()
             pauseOverlay?.removeFromParent()
             pauseOverlay = nil
             tutorialOverlay?.removeFromParent()
@@ -4345,9 +7462,10 @@ final class GameScene: SKScene {
             overviewCloseButton = nil
             isInOverviewMode = false
             guard let view = view else { return }
+            SoundFX.playScreenAdvance(on: self)
             let scene = GameScene(size: size, levelIndex: targetIndex)
             scene.scaleMode = .resizeFill
-            view.presentScene(scene, transition: SKTransition.fade(withDuration: 0.3))
+            view.presentScene(scene, transition: ShellMotion.screenTransition(.forward))
             return
         }
 
@@ -4378,6 +7496,11 @@ final class GameScene: SKScene {
         forcedDirection = nil
         queuedDirection = nil
         queuedTimestamp = nil
+        keyFollowerNode?.removeFromParent()
+        keyFollowerNode = nil
+        routeHintNode?.removeAllActions()
+        routeHintNode?.removeFromParent()
+        routeHintNode = nil
         comboSystem.reset()
         flowSystem.resetRun()
         score = 0
@@ -4386,17 +7509,30 @@ final class GameScene: SKScene {
         isInOverviewMode = false
         keyCount = 0
         switchActivated = false
+        breakableHits.removeAll()
+        orderedBreakablePoints.removeAll()
         gateIsOpen = true
         oneWayDirections.removeAll()
         teleporterMap.removeAll()
         gateTiles.removeAll()
+        orbNodes.removeAll()
         keyNodes.removeAll()
+        timeBonusNodes.values.forEach { $0.removeFromParent() }
+        timeBonusNodes.removeAll()
+        keyFollowerNode = nil
+        routeHintNode = nil
         switchNodes.removeAll()
-        doorNodes.removeAll()
+        switchBlockNodes.removeAll()
+        breakableNodes.removeAll()
         gateNodes.removeAll()
         teleporterNodes.removeAll()
+        movingBlockDefinitions.removeAll()
+        movingBlockTracks.removeAll()
+        movingBlockNodes.removeAll()
+        movingBlockOccupiedTiles.removeAll()
 
         elapsedTime = 0
+        challengeBonusTime = 0
         lastTimerUpdate = nil
         accumulatedPausedTime = 0
         pauseStartTime = nil
@@ -4406,10 +7542,7 @@ final class GameScene: SKScene {
 
         pauseOverlay?.removeFromParent()
         pauseOverlay = nil
-        resultOverlay?.removeFromParent()
-        resultOverlay = nil
-        challengeResultOverlay?.removeFromParent()
-        challengeResultOverlay = nil
+        clearCompletionOverlays()
         tutorialOverlay?.removeFromParent()
         tutorialOverlay = nil
         rewardUnlockOverlay?.removeFromParent()
@@ -4428,6 +7561,14 @@ final class GameScene: SKScene {
         fogTileMapNode = nil
         playerLightNode = nil
         exploredTiles.removeAll()
+        playerPathHistory.removeAll()
+        chaserCurrentDirection = nil
+        chaserBehavior = nil
+        chaserIsMoving = false
+        chaserCaughtPlayer = false
+        chaserRevealPlayed = false
+        chaserTargetLockPlayed = false
+        chaserThreatLevel = 0
         comboCard?.removeAllActions()
         comboCard?.alpha = 0
 
@@ -4444,14 +7585,22 @@ final class GameScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        let now = CACurrentMediaTime()
         guard currentGameState == .playing else {
+            if !(isChallengeMode && currentGameState == .idle) {
+                updateMovingBlocks(now: now)
+            }
+            if chaserThreatLevel != 0 {
+                chaserThreatLevel = 0
+                timerCard?.removeAction(forKey: "chaserThreat")
+                timerCard?.run(timed(.colorize(withColorBlendFactor: 0.0, duration: 0.16), mode: .easeOut))
+            }
             lastTimerUpdate = nil
             return
         }
-        let now = CACurrentMediaTime()
         updateTimer(now: now)
         updateTimerLabel()
-        if let challengeDuration, displayedElapsedTime() >= challengeDuration.seconds {
+        if let challengeLimit = currentChallengeTimeLimit(), displayedElapsedTime() >= challengeLimit {
             finishChallengeRun()
             return
         }
@@ -4461,6 +7610,9 @@ final class GameScene: SKScene {
             lastExplorationRefreshTime = now
         }
         updateGateState(now: now)
+        updateMovingBlocks(now: now)
+        updateChaser(now: now)
+        updateChaserThreatFeedback()
         if let flowEvent = flowSystem.tick(now: now) {
             if flowEvent.delta != 0 {
                 updateFlowBar()
@@ -4475,6 +7627,7 @@ final class GameScene: SKScene {
         super.didFinishUpdate()
         flushPendingMiniMapSetupIfNeeded(now: CACurrentMediaTime())
         guard let player = playerNode else { return }
+        updateCollectedKeyFollower()
         updateFogMask()
         let threshold = Tuning.miniMapPositionUpdateThreshold
         let shouldRefreshMiniMapPosition: Bool
@@ -4495,6 +7648,12 @@ final class GameScene: SKScene {
 
     private func handleTap(at point: CGPoint) {
         guard !isInOverviewMode else { return }
+        if let overlay = leaderboardNameOverlay {
+            if let button = overlay.button(at: point, in: self) {
+                overlay.handleTap(button: button)
+            }
+            return
+        }
         if let overlay = tutorialOverlay {
             if let button = overlay.button(at: point, in: self) {
                 overlay.handleTap(button: button)
@@ -4520,6 +7679,8 @@ final class GameScene: SKScene {
             if let button = overlayButton(at: point) {
                 if let overlay = challengeResultOverlay, button.inParentHierarchy(overlay) {
                     overlay.handleTap(button: button)
+                } else if let overlay = dailyResultOverlay, button.inParentHierarchy(overlay) {
+                    overlay.handleTap(button: button)
                 } else if let overlay = resultOverlay {
                     overlay.handleTap(button: button)
                 }
@@ -4536,6 +7697,12 @@ final class GameScene: SKScene {
     }
 
     private func buttonForTouch(at point: CGPoint) -> ArcadeButtonNode? {
+        if let overlay = leaderboardNameOverlay, let button = overlay.button(at: point, in: self) {
+            return button
+        }
+        if leaderboardNameOverlay != nil {
+            return nil
+        }
         if let overlay = tutorialOverlay, let button = overlay.button(at: point, in: self) {
             return button
         }
@@ -4562,7 +7729,12 @@ final class GameScene: SKScene {
     }
 
     private func overlayButton(at point: CGPoint) -> ArcadeButtonNode? {
-        let targets: Set<String> = ["btn_next", "btn_retry", "btn_levelselect"]
+        if let overlay = storyLeaderboardOverlay,
+           let button = overlay.button(at: point, in: self),
+           button.isEnabled {
+            return button
+        }
+        let targets: Set<String> = ["btn_next", "btn_retry", "btn_levelselect", "btn_story_leaderboard"]
         if let overlay = challengeResultOverlay {
             if let button = overlay.button(at: point, in: self),
                button.isEnabled,
@@ -4570,8 +7742,9 @@ final class GameScene: SKScene {
                targets.contains(name) {
                 return button
             }
-            let cameraPoint = cameraNode.convert(point, from: self)
-            if let button = overlay.button(at: cameraPoint, in: cameraNode),
+        }
+        if let overlay = dailyResultOverlay {
+            if let button = overlay.button(at: point, in: self),
                button.isEnabled,
                let name = button.name,
                targets.contains(name) {
@@ -4585,48 +7758,29 @@ final class GameScene: SKScene {
                targets.contains(name) {
                 return button
             }
-            let cameraPoint = cameraNode.convert(point, from: self)
-            if let button = overlay.button(at: cameraPoint, in: cameraNode),
-               button.isEnabled,
-               let name = button.name,
-               targets.contains(name) {
-                return button
-            }
         }
         return nil
     }
 
     private func handlePauseOverlayTap(at point: CGPoint) -> Bool {
-        guard pauseOverlay != nil else { return false }
-        let targets: [String: () -> Void] = [
-            "btn_pause_resume": { [weak self] in self?.pauseOverlay?.handleTap(named: "btn_pause_resume") },
-            "btn_pause_restart": { [weak self] in self?.pauseOverlay?.handleTap(named: "btn_pause_restart") },
-            "btn_pause_menu": { [weak self] in self?.pauseOverlay?.handleTap(named: "btn_pause_menu") }
-        ]
-
-        for node in nodes(at: point) {
-            if let name = node.name ?? node.parent?.name,
-               let action = targets[name] {
-                action()
-                return true
-            }
-        }
-
-        let cameraPoint = cameraNode.convert(point, from: self)
-        for node in cameraNode.nodes(at: cameraPoint) {
-            if let name = node.name ?? node.parent?.name,
-               let action = targets[name] {
-                action()
-                return true
-            }
-        }
-
-        if let overlay = pauseOverlay,
-           let button = overlay.button(at: point, in: self) {
+        guard let overlay = pauseOverlay else { return false }
+        if let button = overlay.button(at: point, in: self) {
             overlay.handleTap(button: button)
             return true
         }
         return false
+    }
+
+    private func handleCompletedOverlayTap(_ button: ArcadeButtonNode) {
+        if let overlay = storyLeaderboardOverlay, button.inParentHierarchy(overlay) {
+            overlay.handleTap(button: button)
+        } else if let overlay = challengeResultOverlay, button.inParentHierarchy(overlay) {
+            overlay.handleTap(button: button)
+        } else if let overlay = dailyResultOverlay, button.inParentHierarchy(overlay) {
+            overlay.handleTap(button: button)
+        } else if let overlay = resultOverlay {
+            overlay.handleTap(button: button)
+        }
     }
 
     private func localPoint(for button: ArcadeButtonNode, scenePoint: CGPoint) -> CGPoint {
@@ -4649,9 +7803,33 @@ final class GameScene: SKScene {
         }
     }
 
+    @discardableResult
+    private func commitSwipeIfNeeded(at location: CGPoint) -> Bool {
+        guard currentGameState == .playing || currentGameState == .idle else { return false }
+        guard !isMiniMapTouch else { return false }
+        guard activeButton == nil else { return false }
+        guard let start = swipeStart, let direction = swipeDirection(from: start, to: location) else { return false }
+        handleSwipe(direction)
+        swipeConsumed = true
+        swipeStart = nil
+        return true
+    }
+
     #if os(iOS) || os(tvOS)
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let location = touches.first?.location(in: self) else { return }
+        swipeConsumed = false
+        if leaderboardNameOverlay != nil {
+            if let button = buttonForTouch(at: location) {
+                activeButton = button
+                button.setPressed(true)
+            } else {
+                activeButton = nil
+            }
+            swipeStart = nil
+            isMiniMapTouch = false
+            return
+        }
         if tutorialOverlay != nil {
             if let button = buttonForTouch(at: location) {
                 activeButton = button
@@ -4683,7 +7861,7 @@ final class GameScene: SKScene {
             isMiniMapTouch = false
             return
         }
-        if resultOverlay != nil || challengeResultOverlay != nil {
+        if resultOverlay != nil || challengeResultOverlay != nil || dailyResultOverlay != nil {
             activeButton?.setPressed(false)
             activeButton = nil
             swipeStart = nil
@@ -4719,6 +7897,21 @@ final class GameScene: SKScene {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let location = touches.first?.location(in: self) else { return }
+        if let overlay = leaderboardNameOverlay {
+            if let button = activeButton {
+                let localPoint = localPoint(for: button, scenePoint: location)
+                let shouldTap = button.contains(localPoint) && button.isEnabled
+                button.setPressed(false)
+                activeButton = nil
+                swipeStart = nil
+                if shouldTap {
+                    overlay.handleTap(button: button)
+                }
+            } else {
+                swipeStart = nil
+            }
+            return
+        }
         if let overlay = tutorialOverlay {
             if let button = activeButton {
                 let localPoint = localPoint(for: button, scenePoint: location)
@@ -4779,43 +7972,13 @@ final class GameScene: SKScene {
             }
             return
         }
-        if resultOverlay != nil || challengeResultOverlay != nil {
+        if resultOverlay != nil || challengeResultOverlay != nil || dailyResultOverlay != nil {
             activeButton?.setPressed(false)
             activeButton = nil
             swipeStart = nil
-
-            for node in nodes(at: location) {
-                let name = node.name ?? node.parent?.name
-                switch name {
-                case "btn_retry":
-                    retryLevel()
-                    return
-                case "btn_levelselect":
-                    goToLevelSelect()
-                    return
-                case "btn_next":
-                    goToNextLevel()
-                    return
-                default:
-                    break
-                }
-            }
-            let cameraPoint = cameraNode.convert(location, from: self)
-            for node in cameraNode.nodes(at: cameraPoint) {
-                let name = node.name ?? node.parent?.name
-                switch name {
-                case "btn_retry":
-                    retryLevel()
-                    return
-                case "btn_levelselect":
-                    goToLevelSelect()
-                    return
-                case "btn_next":
-                    goToNextLevel()
-                    return
-                default:
-                    break
-                }
+            if let button = overlayButton(at: location) {
+                handleCompletedOverlayTap(button)
+                return
             }
             return
         }
@@ -4843,6 +8006,8 @@ final class GameScene: SKScene {
                     overlay.handleTap(button: button)
                 } else if let overlay = challengeResultOverlay, button.inParentHierarchy(overlay) {
                     overlay.handleTap(button: button)
+                } else if let overlay = dailyResultOverlay, button.inParentHierarchy(overlay) {
+                    overlay.handleTap(button: button)
                 } else if let overlay = resultOverlay {
                     overlay.handleTap(button: button)
                 } else if button === pauseButton {
@@ -4853,6 +8018,11 @@ final class GameScene: SKScene {
         }
 
         if currentGameState == .playing || currentGameState == .idle {
+            if swipeConsumed {
+                swipeStart = nil
+                swipeConsumed = false
+                return
+            }
             if let start = swipeStart, let direction = swipeDirection(from: start, to: location) {
                 handleSwipe(direction)
             } else {
@@ -4865,6 +8035,13 @@ final class GameScene: SKScene {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if leaderboardNameOverlay != nil {
+            if let button = activeButton, let location = touches.first?.location(in: self) {
+                let localPoint = localPoint(for: button, scenePoint: location)
+                button.setPressed(button.contains(localPoint))
+            }
+            return
+        }
         if tutorialOverlay != nil {
             if let button = activeButton, let location = touches.first?.location(in: self) {
                 let localPoint = localPoint(for: button, scenePoint: location)
@@ -4895,7 +8072,10 @@ final class GameScene: SKScene {
             }
             return
         }
-        if resultOverlay != nil {
+        if resultOverlay != nil || challengeResultOverlay != nil || dailyResultOverlay != nil {
+            return
+        }
+        if let location = touches.first?.location(in: self), commitSwipeIfNeeded(at: location) {
             return
         }
         guard let button = activeButton, let location = touches.first?.location(in: self) else { return }
@@ -4914,6 +8094,18 @@ final class GameScene: SKScene {
     #if os(OSX)
     override func mouseDown(with event: NSEvent) {
         let location = event.location(in: self)
+        swipeConsumed = false
+        if leaderboardNameOverlay != nil {
+            if let button = buttonForTouch(at: location) {
+                activeButton = button
+                button.setPressed(true)
+            } else {
+                activeButton = nil
+            }
+            swipeStart = nil
+            isMiniMapTouch = false
+            return
+        }
         if tutorialOverlay != nil {
             if let button = buttonForTouch(at: location) {
                 activeButton = button
@@ -4975,6 +8167,21 @@ final class GameScene: SKScene {
 
     override func mouseUp(with event: NSEvent) {
         let location = event.location(in: self)
+        if let overlay = leaderboardNameOverlay {
+            if let button = activeButton {
+                let localPoint = localPoint(for: button, scenePoint: location)
+                let shouldTap = button.contains(localPoint) && button.isEnabled
+                button.setPressed(false)
+                activeButton = nil
+                swipeStart = nil
+                if shouldTap {
+                    overlay.handleTap(button: button)
+                }
+            } else {
+                swipeStart = nil
+            }
+            return
+        }
         if let overlay = tutorialOverlay {
             if let button = activeButton {
                 let localPoint = localPoint(for: button, scenePoint: location)
@@ -5043,18 +8250,10 @@ final class GameScene: SKScene {
                 activeButton = nil
                 swipeStart = nil
                 if shouldTap {
-                    if let overlay = challengeResultOverlay, button.inParentHierarchy(overlay) {
-                        overlay.handleTap(button: button)
-                    } else {
-                        resultOverlay?.handleTap(button: button)
-                    }
+                    handleCompletedOverlayTap(button)
                 }
             } else if let button = overlayButton(at: location) {
-                if let overlay = challengeResultOverlay, button.inParentHierarchy(overlay) {
-                    overlay.handleTap(button: button)
-                } else {
-                    resultOverlay?.handleTap(button: button)
-                }
+                handleCompletedOverlayTap(button)
             }
             swipeStart = nil
             return
@@ -5083,6 +8282,8 @@ final class GameScene: SKScene {
                     overlay.handleTap(button: button)
                 } else if let overlay = challengeResultOverlay, button.inParentHierarchy(overlay) {
                     overlay.handleTap(button: button)
+                } else if let overlay = dailyResultOverlay, button.inParentHierarchy(overlay) {
+                    overlay.handleTap(button: button)
                 } else if let overlay = resultOverlay {
                     overlay.handleTap(button: button)
                 } else if button === pauseButton {
@@ -5093,6 +8294,11 @@ final class GameScene: SKScene {
         }
 
         if currentGameState == .playing || currentGameState == .idle {
+            if swipeConsumed {
+                swipeStart = nil
+                swipeConsumed = false
+                return
+            }
             if let start = swipeStart, let direction = swipeDirection(from: start, to: location) {
                 handleSwipe(direction)
             } else {
@@ -5105,6 +8311,14 @@ final class GameScene: SKScene {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if leaderboardNameOverlay != nil {
+            if let button = activeButton {
+                let location = event.location(in: self)
+                let localPoint = localPoint(for: button, scenePoint: location)
+                button.setPressed(button.contains(localPoint))
+            }
+            return
+        }
         if tutorialOverlay != nil {
             if let button = activeButton {
                 let location = event.location(in: self)
@@ -5139,11 +8353,23 @@ final class GameScene: SKScene {
             }
             return
         }
-        guard let button = activeButton else { return }
         let location = event.location(in: self)
+        if commitSwipeIfNeeded(at: location) {
+            return
+        }
+        guard let button = activeButton else { return }
         let localPoint = localPoint(for: button, scenePoint: location)
         button.setPressed(button.contains(localPoint))
     }
 
     #endif
 }
+
+#if os(iOS) || os(tvOS)
+extension GameScene: UITextFieldDelegate {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        confirmLeaderboardNamePrompt()
+        return false
+    }
+}
+#endif

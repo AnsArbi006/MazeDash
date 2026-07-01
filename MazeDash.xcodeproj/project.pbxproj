@@ -12,14 +12,17 @@
 		1A03D7FA577302CD37AA2A59 /* Audio in Resources */ = {isa = PBXBuildFile; fileRef = 53BAAC804F66C5300B609457 /* Audio */; };
 		1BA6BFB0E5CC804F0A65D06D /* ResultOverlayNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911860B8939D8FC96A0725D2 /* ResultOverlayNode.swift */; };
 		1DE3FFAC0BE8DD01089EFA0E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1CB0D5F3934D7A406EA76DF /* AppDelegate.swift */; };
+		233B09BF154CACFC432CABD0 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = D5FDA46CAAD99F846635D43F /* GoogleMobileAds */; };
 		286F5DEDFF6EDF710167F5B9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FFDD1BE705930183E7A3A5AB /* Foundation.framework */; };
 		3376D63E63E59FEF5E4F048E /* GlossyUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E713F09C76BBFDF81A542E /* GlossyUI.swift */; };
 		4C5C0C8405A2613B45406951 /* GameViewController 09.03.23.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */; };
 		5D274415E40F1AB3A179987D /* OverlayNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BDC4E39E0296B02558C551 /* OverlayNodes.swift */; };
 		5E5A73C3215EC6E44F6BCD4D /* UIStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2BCFD82A462D4B5E5B57B1 /* UIStyle.swift */; };
+		6F94C0B8E1A24B7F88A32C11 /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 7AC5C8E062A5472EA1780F12 /* GoogleUserMessagingPlatform */; };
 		61D9B902A5A4791D73D3A433 /* MazeSolvability.swift in Sources */ = {isa = PBXBuildFile; fileRef = D23146C4E79C7D796D988E2D /* MazeSolvability.swift */; };
 		6C10A1A98C4F7FEE8D61FB95 /* ScrollContainerNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE687F43F79820CE9DD0A31 /* ScrollContainerNode.swift */; };
 		6C2786512B1FA002680E2188 /* MazeThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 719B24F37012503C91E4D910 /* MazeThemes.swift */; };
+		6D44E3A2316D8D7D6B1B7281 /* LeaderboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D44E3A1316D8D7D6B1B7281 /* LeaderboardService.swift */; };
 		769B9844331E8DBF30943DEC /* GameScene.sks in Resources */ = {isa = PBXBuildFile; fileRef = 9A786993E5BE99321226274F /* GameScene.sks */; };
 		854B837989BA0B63CB4FD99C /* FlowSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990E43B327CEA18B4EE8894C /* FlowSystem.swift */; };
 		8B7F86C079D623C77D843AC0 /* NeonUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399057B736C71E2CFED5A532 /* NeonUI.swift */; };
@@ -54,10 +57,12 @@
 		51E713F09C76BBFDF81A542E /* GlossyUI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlossyUI.swift; sourceTree = "<group>"; };
 		53BAAC804F66C5300B609457 /* Audio */ = {isa = PBXFileReference; includeInIndex = 1; path = Audio; sourceTree = "<group>"; };
 		5E76C13419B8AEE9E637EB84 /* MazeGenerator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MazeGenerator.swift; sourceTree = "<group>"; };
+		6D44E3A1316D8D7D6B1B7281 /* LeaderboardService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LeaderboardService.swift; sourceTree = "<group>"; };
 		719B24F37012503C91E4D910 /* MazeThemes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MazeThemes.swift; sourceTree = "<group>"; };
 		766292B4D1B71AD717942F0E /* ComboSystem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComboSystem.swift; sourceTree = "<group>"; };
 		7F1AC47FEDF538443C58E490 /* MiniMapNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MiniMapNode.swift; sourceTree = "<group>"; };
 		801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "GameViewController 09.03.23.swift"; sourceTree = "<group>"; };
+		801CE19923019D394CF114D9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		911860B8939D8FC96A0725D2 /* ResultOverlayNode.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ResultOverlayNode.swift; sourceTree = "<group>"; };
 		990E43B327CEA18B4EE8894C /* FlowSystem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FlowSystem.swift; sourceTree = "<group>"; };
 		9A786993E5BE99321226274F /* GameScene.sks */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.sks; path = GameScene.sks; sourceTree = "<group>"; };
@@ -84,6 +89,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				286F5DEDFF6EDF710167F5B9 /* Foundation.framework in Frameworks */,
+				233B09BF154CACFC432CABD0 /* GoogleMobileAds in Frameworks */,
+				6F94C0B8E1A24B7F88A32C11 /* GoogleUserMessagingPlatform in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -114,9 +121,10 @@
 				79826E4C46EF2636074F3C3C /* Base.lproj */,
 				C1CB0D5F3934D7A406EA76DF /* AppDelegate.swift */,
 				801CE19923019D394CF114D8 /* GameViewController 09.03.23.swift */,
+				801CE19923019D394CF114D9 /* Info.plist */,
 			);
 			name = iOS;
-			path = "MazeDash/iOS";
+			path = MazeDash/iOS;
 			sourceTree = "<group>";
 		};
 		88B0E8DEDF12A8205594AD32 = {
@@ -143,6 +151,7 @@
 				B6DABAAABC1E03C417BD688F /* LevelCardNode.swift */,
 				F6D2C34AA7A2DED72674EDEB /* LevelConfig.swift */,
 				2E5B9E1DB5076B1F8431F42E /* LevelSelectScene.swift */,
+				6D44E3A1316D8D7D6B1B7281 /* LeaderboardService.swift */,
 				24B34F82C67994173B12FABB /* MazeCache.swift */,
 				5E76C13419B8AEE9E637EB84 /* MazeGenerator.swift */,
 				D23146C4E79C7D796D988E2D /* MazeSolvability.swift */,
@@ -162,7 +171,7 @@
 				53BAAC804F66C5300B609457 /* Audio */,
 			);
 			name = Shared;
-			path = "MazeDash/Shared";
+			path = MazeDash/Shared;
 			sourceTree = "<group>";
 		};
 		B5469497AC427D2F92F723FE /* Frameworks */ = {
@@ -197,6 +206,10 @@
 			dependencies = (
 			);
 			name = "MazeDash iOS";
+			packageProductDependencies = (
+				D5FDA46CAAD99F846635D43F /* GoogleMobileAds */,
+				7AC5C8E062A5472EA1780F12 /* GoogleUserMessagingPlatform */,
+			);
 			productName = MazeDash;
 			productReference = 9CB7AE211E2A92ED79A6A668 /* MazeDash.app */;
 			productType = "com.apple.product-type.application";
@@ -226,6 +239,10 @@
 			);
 			mainGroup = 88B0E8DEDF12A8205594AD32;
 			minimizedProjectReferenceProxies = 0;
+			packageReferences = (
+				74F8847A12581B59E750A573 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				92F0E6A447B84F489221A8DD /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = EEC4F4FBA1D709A8495DBA97 /* Products */;
 			projectDirPath = "";
@@ -267,6 +284,7 @@
 				E3CD80CCDA9B0191BE6D9088 /* LevelCardNode.swift in Sources */,
 				BE7D32A9E629AA85071C1016 /* LevelConfig.swift in Sources */,
 				A1992C53EF327FF9D3E8B4ED /* LevelSelectScene.swift in Sources */,
+				6D44E3A2316D8D7D6B1B7281 /* LeaderboardService.swift in Sources */,
 				BD82BD7A4E368A9F10C0ACE3 /* MazeCache.swift in Sources */,
 				FDD64A839D19145F0D221587 /* MazeGenerator.swift in Sources */,
 				61D9B902A5A4791D73D3A433 /* MazeSolvability.swift in Sources */,
@@ -348,26 +366,22 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = "MazeDash/iOS/MazeDash.entitlements";
+				CODE_SIGN_ENTITLEMENTS = MazeDash/iOS/MazeDash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MazeDash/iOS/Info.plist;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = "LaunchScreen 09.00.14";
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
 				PRODUCT_NAME = MazeDash;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTED_DEVICE_FAMILY = 1;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -445,26 +459,22 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = "MazeDash/iOS/MazeDash.entitlements";
+				CODE_SIGN_ENTITLEMENTS = MazeDash/iOS/MazeDash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = UBMDRS7H3R;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MazeDash/iOS/Info.plist;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = "LaunchScreen 09.00.14";
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ansarbi.MazeDash;
 				PRODUCT_NAME = MazeDash;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTED_DEVICE_FAMILY = 1;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -496,6 +506,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		74F8847A12581B59E750A573 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.14.0;
+			};
+		};
+		92F0E6A447B84F489221A8DD /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D5FDA46CAAD99F846635D43F /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 74F8847A12581B59E750A573 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+		7AC5C8E062A5472EA1780F12 /* GoogleUserMessagingPlatform */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 92F0E6A447B84F489221A8DD /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */;
+			productName = GoogleUserMessagingPlatform;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A8F55E490FE46109DEC7DED4 /* Project object */;
 }

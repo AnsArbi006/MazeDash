@@ -6,16 +6,21 @@ Use these as the exact default answers unless something in your business setup d
 
 Recommended answer:
 
-- Data Not Collected
+- Data Collected
 
 Reason:
 
-- The current app stores gameplay data locally on device.
-- No login, ads, analytics, tracking, or backend data collection is implemented in the current shipping build.
+- The app stores most gameplay data locally on device.
+- The optional online Time Challenge leaderboard sends only:
+  - a player-chosen display name
+  - duration category
+  - best maze count
+- No login, ads, analytics, or cross-app tracking is implemented.
 
 Important:
 
-- If you add analytics, ads, crash reporting, cloud save, or account features later, these answers must be updated.
+- In App Store Connect, this should be disclosed as limited app-functionality data for the optional online leaderboard.
+- If you add analytics, ads, crash reporting, cloud save, or account features later, these answers must be updated again.
 
 ## Privacy Policy URL
 
@@ -43,7 +48,7 @@ Recommended default for MazeDash:
 - No sexual content or nudity
 - No gambling
 - No alcohol, tobacco, or drug references
-- No user-generated content
+- Limited user-generated content only through the optional leaderboard display name
 - No unrestricted web access
 
 Expected result:

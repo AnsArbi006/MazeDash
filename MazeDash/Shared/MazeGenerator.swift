@@ -8,6 +8,22 @@ struct MazeParameters: Codable, Hashable {
     let orbCount: Int
 }
 
+struct MovingBlockData: Codable, Hashable {
+    let start: GridPoint
+    let end: GridPoint
+    let speedMultiplier: Double
+    let phaseOffset: Double
+}
+
+struct ChaserSpawnData: Codable, Hashable {
+    let spawn: GridPoint
+    let behavior: ChaserBehavior
+    let startDelay: TimeInterval
+    let repathDelay: TimeInterval
+    let speedMultiplier: Double
+    let trailDelaySteps: Int
+}
+
 struct MazeData: Codable {
     let rows: Int
     let cols: Int
@@ -18,6 +34,63 @@ struct MazeData: Codable {
     let t2: TimeInterval
     let t3: TimeInterval
     let shortestPath: Int
+    let movingBlocks: [MovingBlockData]
+    let chaserSpawn: ChaserSpawnData?
+
+    init(
+        rows: Int,
+        cols: Int,
+        grid: [String],
+        start: GridPoint,
+        exit: GridPoint,
+        orbs: [GridPoint],
+        t2: TimeInterval,
+        t3: TimeInterval,
+        shortestPath: Int,
+        movingBlocks: [MovingBlockData] = [],
+        chaserSpawn: ChaserSpawnData? = nil
+    ) {
+        self.rows = rows
+        self.cols = cols
+        self.grid = grid
+        self.start = start
+        self.exit = exit
+        self.orbs = orbs
+        self.t2 = t2
+        self.t3 = t3
+        self.shortestPath = shortestPath
+        self.movingBlocks = movingBlocks
+        self.chaserSpawn = chaserSpawn
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case rows
+        case cols
+        case grid
+        case start
+        case exit
+        case orbs
+        case t2
+        case t3
+        case shortestPath
+        case movingBlocks
+        case chaserSpawn
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rows = try container.decode(Int.self, forKey: .rows)
+        cols = try container.decode(Int.self, forKey: .cols)
+        grid = try container.decode([String].self, forKey: .grid)
+        start = try container.decode(GridPoint.self, forKey: .start)
+        exit = try container.decode(GridPoint.self, forKey: .exit)
+        orbs = try container.decode([GridPoint].self, forKey: .orbs)
+        t2 = try container.decode(TimeInterval.self, forKey: .t2)
+        t3 = try container.decode(TimeInterval.self, forKey: .t3)
+        shortestPath = try container.decode(Int.self, forKey: .shortestPath)
+        movingBlocks = try container.decodeIfPresent([MovingBlockData].self, forKey: .movingBlocks) ?? []
+        chaserSpawn = try container.decodeIfPresent(ChaserSpawnData.self, forKey: .chaserSpawn)
+    }
 
     func tile(at point: GridPoint) -> Character? {
         guard point.row >= 0, point.row < rows, point.col >= 0, point.col < cols else {
@@ -172,40 +245,179 @@ enum MazeGenerator {
                 var specialTiles: [GridPoint: Character] = [:]
                 var attemptReserved = Set<GridPoint>([start, exit])
                 var minArrowCount = 0
+                var movingBlocks: [MovingBlockData] = []
+                var chaserSpawn: ChaserSpawnData?
 
                 if config.enabledMechanics.contains(.keysDoors) {
-                    let doorCount = max(1, min(config.doorCount, max(1, mainPath.count / 8)))
                     let keyCount = max(1, min(config.keyCount, max(1, mainPath.count / 10)))
-                    let splitIndex = max(2, Int(Double(mainPath.count) * 0.55))
+                    let splitIndex = max(2, Int(Double(mainPath.count) * 0.52))
+                    let targetDistance = max(2, Int(Double(shortestPath) * 0.42))
 
-                    var doorCandidates = Array(mainPath.dropFirst(splitIndex)).filter { !attemptReserved.contains($0) }
-                    doorCandidates.shuffle(using: &rng)
-                    let doors = Array(doorCandidates.prefix(doorCount))
-                    for door in doors {
-                        specialTiles[door] = "D"
-                        attemptReserved.insert(door)
+                    let branchKeyCandidates = pathCells.filter { point in
+                        guard !attemptReserved.contains(point), point != start, point != exit else { return false }
+                        guard !mainPathSet.contains(point) else { return false }
+                        let distanceFromStart = second.distances[point.row][point.col]
+                        guard distanceFromStart >= max(2, shortestPath / 5) else { return false }
+                        guard distanceFromStart <= max(4, Int(Double(shortestPath) * 0.75)) else { return false }
+                        return neighborPoints(of: point, rows: rows, cols: cols).contains(where: mainPathSet.contains)
                     }
 
-                    var keyCandidates = Array(mainPath.prefix(max(2, splitIndex))).filter { !attemptReserved.contains($0) && $0 != start }
-                    keyCandidates.shuffle(using: &rng)
-                    let keys = Array(keyCandidates.prefix(keyCount))
-                    for key in keys {
-                        specialTiles[key] = "K"
+                    let prioritizedBranchCandidates = branchKeyCandidates.sorted { lhs, rhs in
+                        let lhsDistance = abs(second.distances[lhs.row][lhs.col] - targetDistance)
+                        let rhsDistance = abs(second.distances[rhs.row][rhs.col] - targetDistance)
+                        if lhsDistance != rhsDistance { return lhsDistance < rhsDistance }
+                        return second.distances[lhs.row][lhs.col] < second.distances[rhs.row][rhs.col]
+                    }
+
+                    var selectedKeys: [GridPoint] = []
+                    for key in prioritizedBranchCandidates.prefix(keyCount) {
+                        selectedKeys.append(key)
                         attemptReserved.insert(key)
+                    }
+
+                    if selectedKeys.count < keyCount {
+                        var fallbackCandidates = Array(mainPath.prefix(max(2, splitIndex))).filter {
+                            !attemptReserved.contains($0) && $0 != start && $0 != exit
+                        }
+                        fallbackCandidates.shuffle(using: &rng)
+                        for key in fallbackCandidates.prefix(keyCount - selectedKeys.count) {
+                            selectedKeys.append(key)
+                            attemptReserved.insert(key)
+                        }
+                    }
+
+                    for key in selectedKeys {
+                        specialTiles[key] = "K"
                     }
                 }
 
-                if config.enabledMechanics.contains(.switchDoors) {
-                    let doorCount = max(1, min(config.doorCount, max(1, mainPath.count / 8)))
+                if config.enabledMechanics.contains(.breakableWalls) {
+                    let breakableCount = max(1, min(config.breakableCount, max(1, mainPath.count / 10)))
+                    let splitIndex = max(3, Int(Double(mainPath.count) * 0.52))
+
+                    let requiredBreakables = requiredBlockingCandidates(
+                        on: mainPath,
+                        walls: walls,
+                        start: start,
+                        exit: exit,
+                        reserved: attemptReserved
+                    ).filter { second.distances[$0.row][$0.col] <= second.distances[mainPath[min(splitIndex, mainPath.count - 1)].row][mainPath[min(splitIndex, mainPath.count - 1)].col] }
+
+                    let primaryBreakable = (requiredBreakables.isEmpty ? Array(mainPath.dropFirst(splitIndex)) : requiredBreakables).first {
+                        !attemptReserved.contains($0) && !protectedTiles.contains($0)
+                    }
+
+                    if let primaryBreakable {
+                        specialTiles[primaryBreakable] = "B"
+                        attemptReserved.insert(primaryBreakable)
+                    }
+
+                    var extraBreakableCandidates = Array(mainPath.dropFirst(splitIndex)).filter {
+                        !attemptReserved.contains($0) && !protectedTiles.contains($0)
+                    }
+                    extraBreakableCandidates.shuffle(using: &rng)
+                    for point in extraBreakableCandidates.prefix(max(0, breakableCount - (primaryBreakable == nil ? 0 : 1))) {
+                        specialTiles[point] = "B"
+                        attemptReserved.insert(point)
+                    }
+                }
+
+                if config.enabledMechanics.contains(.switchBlocks) {
+                    let switchBlockCount = max(1, min(config.switchBlockCount, max(1, mainPath.count / 8)))
                     let switchCount = max(1, min(config.switchCount, max(1, mainPath.count / 14)))
                     let splitIndex = max(3, Int(Double(mainPath.count) * 0.58))
+                    let pathIndexByPoint = Dictionary(uniqueKeysWithValues: mainPath.enumerated().map { ($0.element, $0.offset) })
+                    let progressionSpacing = max(4, min(9, mainPath.count / 7))
+                    let breakablePoints = specialTiles.compactMap { point, tile in
+                        tile == "B" ? point : nil
+                    }
+                    let breakableIndices = breakablePoints.compactMap { pathIndexByPoint[$0] }
+                    let breakableSpacingBuffer = Set(
+                        breakablePoints.flatMap {
+                            bufferedPoints(around: $0, maxDistance: 4, rows: rows, cols: cols)
+                        }
+                    )
 
-                    var doorCandidates = Array(mainPath.dropFirst(splitIndex)).filter { !attemptReserved.contains($0) }
-                    doorCandidates.shuffle(using: &rng)
-                    let doors = Array(doorCandidates.prefix(doorCount))
-                    for door in doors {
-                        specialTiles[door] = "D"
-                        attemptReserved.insert(door)
+                    let requiredSwitchBlocks = requiredBlockingCandidates(
+                        on: mainPath,
+                        walls: walls,
+                        start: start,
+                        exit: exit,
+                        reserved: attemptReserved
+                    )
+                    let primarySwitchBlock = (requiredSwitchBlocks.isEmpty ? Array(mainPath.dropFirst(splitIndex)) : requiredSwitchBlocks).first {
+                        !attemptReserved.contains($0)
+                        && !protectedTiles.contains($0)
+                        && !breakableSpacingBuffer.contains($0)
+                        && pathIndexByPoint[$0].map { candidateIndex in
+                            breakableIndices.allSatisfy { abs($0 - candidateIndex) >= progressionSpacing }
+                        } ?? false
+                    }
+
+                    if let primarySwitchBlock {
+                        specialTiles[primarySwitchBlock] = "X"
+                        attemptReserved.insert(primarySwitchBlock)
+                    }
+
+                    var switchBlockCandidates = Array(mainPath.dropFirst(splitIndex)).filter {
+                        !attemptReserved.contains($0)
+                        && !protectedTiles.contains($0)
+                        && !breakableSpacingBuffer.contains($0)
+                        && pathIndexByPoint[$0].map { candidateIndex in
+                            breakableIndices.allSatisfy { abs($0 - candidateIndex) >= progressionSpacing }
+                        } ?? false
+                    }
+                    switchBlockCandidates.shuffle(using: &rng)
+                    for point in switchBlockCandidates.prefix(max(0, switchBlockCount - (primarySwitchBlock == nil ? 0 : 1))) {
+                        specialTiles[point] = "X"
+                        attemptReserved.insert(point)
+                    }
+
+                    let switchAnchorPoint = primarySwitchBlock ?? mainPath[min(splitIndex, mainPath.count - 1)]
+                    let switchAnchorDistance = max(1, second.distances[switchAnchorPoint.row][switchAnchorPoint.col])
+                    let switchAnchorIndex = pathIndexByPoint[switchAnchorPoint] ?? (mainPath.count - 1)
+                    let desiredSwitchIndex = max(2, Int(Double(switchAnchorIndex) * 0.45))
+                    let minimumGap = max(5, min(11, mainPath.count / 6))
+                    let earliestBlockingIndex = ([switchAnchorIndex] + breakableIndices).min() ?? switchAnchorIndex
+
+                    var primarySwitch: GridPoint?
+                    let mainPathSwitchCandidates = Array(mainPath.dropFirst().dropLast()).filter {
+                        !attemptReserved.contains($0)
+                        && $0 != start
+                        && $0 != exit
+                        && !protectedTiles.contains($0)
+                        && !breakableSpacingBuffer.contains($0)
+                        && second.distances[$0.row][$0.col] >= 0
+                        && second.distances[$0.row][$0.col] < switchAnchorDistance
+                        && pathIndexByPoint[$0].map { candidateIndex in
+                            earliestBlockingIndex - candidateIndex >= minimumGap
+                        } ?? false
+                    }
+
+                    let spreadCandidates = mainPathSwitchCandidates.filter {
+                        let candidateIndex = pathIndexByPoint[$0] ?? 0
+                        return switchAnchorIndex - candidateIndex >= minimumGap
+                    }
+                    let prioritizedCandidates = spreadCandidates.isEmpty ? mainPathSwitchCandidates : spreadCandidates
+                    let shapedCandidates = prioritizedCandidates.filter {
+                        isIntersectionOrCorner($0, walls: walls) || isCorridor($0, walls: walls)
+                    }
+                    let rankedCandidates = shapedCandidates.isEmpty ? prioritizedCandidates : shapedCandidates
+
+                    primarySwitch = rankedCandidates.min {
+                        let lhsIndex = pathIndexByPoint[$0] ?? 0
+                        let rhsIndex = pathIndexByPoint[$1] ?? 0
+                        let lhsScore = abs(lhsIndex - desiredSwitchIndex)
+                        let rhsScore = abs(rhsIndex - desiredSwitchIndex)
+                        if lhsScore == rhsScore {
+                            return lhsIndex < rhsIndex
+                        }
+                        return lhsScore < rhsScore
+                    }
+
+                    if let primarySwitch {
+                        specialTiles[primarySwitch] = "T"
+                        attemptReserved.insert(primarySwitch)
                     }
 
                     var switchCandidates = pathCells.filter {
@@ -213,13 +425,17 @@ enum MazeGenerator {
                         && $0 != start
                         && $0 != exit
                         && !protectedTiles.contains($0)
+                        && !breakableSpacingBuffer.contains($0)
                         && second.distances[$0.row][$0.col] >= 0
-                        && second.distances[$0.row][$0.col] < second.distances[start.row][start.col]
+                        && second.distances[$0.row][$0.col] < switchAnchorDistance
+                        && (pathIndexByPoint[$0].map { candidateIndex in
+                            earliestBlockingIndex - candidateIndex >= minimumGap
+                        } ?? true)
                     }
                     switchCandidates.sort {
                         second.distances[$0.row][$0.col] > second.distances[$1.row][$1.col]
                     }
-                    let switches = Array(switchCandidates.prefix(switchCount))
+                    let switches = Array(switchCandidates.prefix(max(0, switchCount - (primarySwitch == nil ? 0 : 1))))
                     for trigger in switches {
                         specialTiles[trigger] = "T"
                         attemptReserved.insert(trigger)
@@ -274,6 +490,57 @@ enum MazeGenerator {
                     }
                 }
 
+                if config.enabledMechanics.contains(.movingBlocks) {
+                    let targetCount = max(1, config.movingBlockCount)
+                    let trackCandidates = movingTrackCandidates(
+                        on: mainPath,
+                        reserved: attemptReserved,
+                        protected: protectedTiles
+                    )
+                    for (index, track) in trackCandidates.prefix(targetCount).enumerated() {
+                        guard let first = track.first, let last = track.last else { continue }
+                        movingBlocks.append(
+                            MovingBlockData(
+                                start: first,
+                                end: last,
+                                speedMultiplier: 0.72 + Double(index) * 0.04,
+                                phaseOffset: Double(index) * 1.35
+                            )
+                        )
+                        for point in track {
+                            attemptReserved.insert(point)
+                        }
+                    }
+                    if movingBlocks.count < targetCount {
+                        continue
+                    }
+                }
+
+                if config.enabledMechanics.contains(.chaserEnemy) {
+                    guard let behavior = config.chaserBehavior else { continue }
+                    guard let spawn = selectChaserSpawn(
+                        from: pathCells,
+                        mainPath: mainPathSet,
+                        distancesFromStart: second.distances,
+                        walls: walls,
+                        start: start,
+                        exit: exit,
+                        reserved: attemptReserved,
+                        protected: protectedTiles
+                    ) else {
+                        continue
+                    }
+                    chaserSpawn = ChaserSpawnData(
+                        spawn: spawn,
+                        behavior: behavior,
+                        startDelay: behavior == .direct ? 1.1 : 1.35,
+                        repathDelay: behavior == .direct ? 0.28 : 0.34,
+                        speedMultiplier: behavior == .direct ? 0.86 : 0.82,
+                        trailDelaySteps: behavior == .direct ? 0 : 8
+                    )
+                    attemptReserved.insert(spawn)
+                }
+
                 var orbCandidates = pathCells.filter { !attemptReserved.contains($0) }
                 orbCandidates.shuffle(using: &rng)
                 let orbCount = min(config.orbCount, orbCandidates.count)
@@ -288,10 +555,43 @@ enum MazeGenerator {
                 grid[start.row][start.col] = "S"
                 grid[exit.row][exit.col] = "E"
 
+                if config.enabledMechanics.contains(.breakableWalls),
+                   !MazeSolvability.requiresBreakableUse(grid: grid, start: start, exit: exit) {
+                    let breakableSplitIndex = max(3, Int(Double(mainPath.count) * 0.52))
+                    let ensuredBreakable = ensureRequiredBreakable(
+                        in: &grid,
+                        mainPath: mainPath,
+                        splitIndex: breakableSplitIndex,
+                        protected: protectedTiles,
+                        start: start,
+                        exit: exit
+                    )
+                    if !ensuredBreakable {
+                        continue
+                    }
+                }
+
+                if config.enabledMechanics.contains(.switchBlocks),
+                   !MazeSolvability.requiresSwitchBlockUse(grid: grid, start: start, exit: exit) {
+                    continue
+                }
+
                 let analysis = MazeSolvability.analyze(grid: grid, start: start, exit: exit)
                 if analysis.solvable {
                     let rowsStrings = grid.map { String($0) }
-                    return MazeData(rows: rows, cols: cols, grid: rowsStrings, start: start, exit: exit, orbs: orbs, t2: t2, t3: t3, shortestPath: shortestPath)
+                    return MazeData(
+                        rows: rows,
+                        cols: cols,
+                        grid: rowsStrings,
+                        start: start,
+                        exit: exit,
+                        orbs: orbs,
+                        t2: t2,
+                        t3: t3,
+                        shortestPath: shortestPath,
+                        movingBlocks: movingBlocks,
+                        chaserSpawn: chaserSpawn
+                    )
                 }
 
                 if config.enabledMechanics.contains(.oneWay) {
@@ -306,7 +606,19 @@ enum MazeGenerator {
                     )
                     if repaired {
                         let rowsStrings = grid.map { String($0) }
-                        return MazeData(rows: rows, cols: cols, grid: rowsStrings, start: start, exit: exit, orbs: orbs, t2: t2, t3: t3, shortestPath: shortestPath)
+                        return MazeData(
+                            rows: rows,
+                            cols: cols,
+                            grid: rowsStrings,
+                            start: start,
+                            exit: exit,
+                            orbs: orbs,
+                            t2: t2,
+                            t3: t3,
+                            shortestPath: shortestPath,
+                            movingBlocks: movingBlocks,
+                            chaserSpawn: chaserSpawn
+                        )
                     }
                 }
             }
@@ -327,7 +639,7 @@ enum MazeGenerator {
         let baseTime = Double(shortestPath) * MazeTiming.stepDuration
         let t3 = max(4.0, baseTime * 1.25)
         let t2 = max(t3 + 1.5, baseTime * 1.6)
-        return MazeData(rows: rows, cols: cols, grid: rowsStrings, start: start, exit: exit, orbs: [], t2: t2, t3: t3, shortestPath: shortestPath)
+        return MazeData(rows: rows, cols: cols, grid: rowsStrings, start: start, exit: exit, orbs: [], t2: t2, t3: t3, shortestPath: shortestPath, movingBlocks: [], chaserSpawn: nil)
     }
 
     private static func baseGrid(walls: [[Bool]]) -> [[Character]] {
@@ -346,6 +658,34 @@ enum MazeGenerator {
         for (point, tile) in specialTiles {
             grid[point.row][point.col] = tile
         }
+    }
+
+    private static func ensureRequiredBreakable(
+        in grid: inout [[Character]],
+        mainPath: [GridPoint],
+        splitIndex: Int,
+        protected: Set<GridPoint>,
+        start: GridPoint,
+        exit: GridPoint
+    ) -> Bool {
+        guard !MazeSolvability.requiresBreakableUse(grid: grid, start: start, exit: exit) else {
+            return true
+        }
+
+        let candidatePoints = Array(mainPath.dropFirst(splitIndex)).filter {
+            !protected.contains($0) && grid[$0.row][$0.col] == "."
+        }
+
+        for point in candidatePoints.reversed() {
+            grid[point.row][point.col] = "B"
+            if MazeSolvability.requiresBreakableUse(grid: grid, start: start, exit: exit),
+               MazeSolvability.isSolvable(grid: grid, start: start, exit: exit) {
+                return true
+            }
+            grid[point.row][point.col] = "."
+        }
+
+        return false
     }
 
     private static func stripArrows(from grid: [[Character]]) -> [[Character]] {
@@ -708,6 +1048,115 @@ enum MazeGenerator {
         return path.reversed()
     }
 
+    private static func requiredBlockingCandidates(
+        on mainPath: [GridPoint],
+        walls: [[Bool]],
+        start: GridPoint,
+        exit: GridPoint,
+        reserved: Set<GridPoint>
+    ) -> [GridPoint] {
+        guard mainPath.count >= 6 else { return [] }
+
+        let splitIndex = max(3, Int(Double(mainPath.count) * 0.5))
+        var candidates: [GridPoint] = []
+        for point in mainPath.dropFirst(splitIndex).dropLast() {
+            guard !reserved.contains(point) else { continue }
+            guard isCorridor(point, walls: walls) else { continue }
+            var blockedWalls = walls
+            blockedWalls[point.row][point.col] = true
+            let distances = bfsDistances(from: start, walls: blockedWalls).distances
+            if distances[exit.row][exit.col] == -1 {
+                candidates.append(point)
+            }
+        }
+        return candidates
+    }
+
+    private static func movingTrackCandidates(
+        on mainPath: [GridPoint],
+        reserved: Set<GridPoint>,
+        protected: Set<GridPoint>
+    ) -> [[GridPoint]] {
+        guard mainPath.count >= 5 else { return [] }
+
+        var candidates: [[GridPoint]] = []
+        var index = 0
+
+        while index < mainPath.count - 2 {
+            let current = mainPath[index]
+            let next = mainPath[index + 1]
+            let deltaRow = next.row - current.row
+            let deltaCol = next.col - current.col
+
+            guard abs(deltaRow) + abs(deltaCol) == 1 else {
+                index += 1
+                continue
+            }
+
+            var end = index + 1
+            while end + 1 < mainPath.count {
+                let lhs = mainPath[end]
+                let rhs = mainPath[end + 1]
+                if rhs.row - lhs.row == deltaRow && rhs.col - lhs.col == deltaCol {
+                    end += 1
+                } else {
+                    break
+                }
+            }
+
+            let run = Array(mainPath[index...end]).filter { !reserved.contains($0) && !protected.contains($0) }
+            if run.count >= 3 {
+                if run.count <= 4 {
+                    candidates.append(run)
+                } else {
+                    let mid = run.count / 2
+                    let start = max(0, mid - 2)
+                    let slice = Array(run[start..<min(run.count, start + 4)])
+                    if slice.count >= 3 {
+                        candidates.append(slice)
+                    }
+                }
+            }
+
+            index = max(index + 1, end)
+        }
+
+        return candidates.sorted {
+            if $0.count == $1.count {
+                return $0.first!.row + $0.first!.col < $1.first!.row + $1.first!.col
+            }
+            return $0.count > $1.count
+        }
+    }
+
+    private static func selectChaserSpawn(
+        from pathCells: [GridPoint],
+        mainPath: Set<GridPoint>,
+        distancesFromStart: [[Int]],
+        walls: [[Bool]],
+        start: GridPoint,
+        exit: GridPoint,
+        reserved: Set<GridPoint>,
+        protected: Set<GridPoint>
+    ) -> GridPoint? {
+        let minimumDistance = max(6, max(walls.count, walls[0].count) / 3)
+        let candidates = pathCells.filter {
+            guard $0 != start, $0 != exit else { return false }
+            guard !reserved.contains($0), !protected.contains($0) else { return false }
+            guard distancesFromStart[$0.row][$0.col] >= minimumDistance else { return false }
+            return neighborCount($0, walls: walls) >= 2
+        }
+
+        return candidates.max { lhs, rhs in
+            let lhsScore = distancesFromStart[lhs.row][lhs.col] + (mainPath.contains(lhs) ? 0 : 3)
+            let rhsScore = distancesFromStart[rhs.row][rhs.col] + (mainPath.contains(rhs) ? 0 : 3)
+            if lhsScore == rhsScore {
+                return neighborCount(lhs, walls: walls) < neighborCount(rhs, walls: walls)
+            }
+            return lhsScore < rhsScore
+        }
+    }
+
     private static func walkableDirections(from point: GridPoint, walls: [[Bool]]) -> [MoveDirection] {
         var directions: [MoveDirection] = []
         for direction in MoveDirection.allCases {
@@ -723,6 +1172,20 @@ enum MazeGenerator {
 
     private static func neighborCount(_ point: GridPoint, walls: [[Bool]]) -> Int {
         walkableDirections(from: point, walls: walls).count
+    }
+
+    private static func bufferedPoints(around point: GridPoint, maxDistance: Int, rows: Int, cols: Int) -> [GridPoint] {
+        guard maxDistance > 0 else { return [point] }
+        var points: [GridPoint] = []
+        for row in max(0, point.row - maxDistance)...min(rows - 1, point.row + maxDistance) {
+            for col in max(0, point.col - maxDistance)...min(cols - 1, point.col + maxDistance) {
+                let candidate = GridPoint(row: row, col: col)
+                if abs(candidate.row - point.row) + abs(candidate.col - point.col) <= maxDistance {
+                    points.append(candidate)
+                }
+            }
+        }
+        return points
     }
 
     private static func isIntersectionOrCorner(_ point: GridPoint, walls: [[Bool]]) -> Bool {
@@ -952,7 +1415,11 @@ enum MazeGenerator {
             config.teleporterPairs > 0 ? "tp\(min(config.teleporterPairs, 2))" : "",
             config.oneWayDensity > 0 ? "ow\(bucket(for: Int(config.oneWayDensity * 1000), bounds: [18, 32, 48, 64]))" : "",
             config.gatePeriod > 0 ? "gt\(bucket(for: Int(config.gatePeriod * 100), bounds: [80, 90, 100]))" : "",
-            config.doorCount > 0 ? "dr\(config.doorCount)" : ""
+            config.doorCount > 0 ? "dr\(config.doorCount)" : "",
+            config.breakableCount > 0 ? "br\(config.breakableCount)" : "",
+            config.switchBlockCount > 0 ? "sb\(config.switchBlockCount)" : "",
+            config.movingBlockCount > 0 ? "mb\(config.movingBlockCount)" : "",
+            config.chaserBehavior.map { "ch\($0.rawValue)" } ?? ""
         ]
         return parts.filter { !$0.isEmpty }.joined(separator: "_")
     }

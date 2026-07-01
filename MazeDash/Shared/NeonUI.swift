@@ -11,6 +11,77 @@ enum NeonPalette {
     static let panelFill = SKColor(red: 0.08, green: 0.1, blue: 0.16, alpha: 0.88)
 }
 
+enum ShellScreenTransitionDirection {
+    case forward
+    case backward
+    case neutral
+}
+
+enum ShellMotion {
+    static func screenTransition(_ direction: ShellScreenTransitionDirection) -> SKTransition {
+        let transition: SKTransition
+        switch direction {
+        case .forward:
+            transition = .push(with: .left, duration: 0.34)
+        case .backward:
+            transition = .push(with: .right, duration: 0.30)
+        case .neutral:
+            transition = .crossFade(withDuration: 0.2)
+        }
+        transition.pausesIncomingScene = false
+        transition.pausesOutgoingScene = false
+        return transition
+    }
+
+    static func prepareOverlay(dimNode: SKSpriteNode, cardNode: SKSpriteNode, restPosition: CGPoint) {
+        dimNode.removeAllActions()
+        cardNode.removeAllActions()
+        dimNode.alpha = 0
+        cardNode.alpha = 0
+        cardNode.setScale(0.975)
+        cardNode.position = CGPoint(x: restPosition.x, y: restPosition.y - 10)
+    }
+
+    static func animateOverlayIn(dimNode: SKSpriteNode, cardNode: SKSpriteNode, restPosition: CGPoint, completion: (() -> Void)? = nil) {
+        prepareOverlay(dimNode: dimNode, cardNode: cardNode, restPosition: restPosition)
+
+        dimNode.run(timed(.fadeAlpha(to: 1.0, duration: 0.16), mode: .easeOut))
+
+        let move = timed(.move(to: restPosition, duration: 0.2), mode: .easeOut)
+        let fade = timed(.fadeIn(withDuration: 0.18), mode: .easeOut)
+        let scale = timed(.scale(to: 1.0, duration: 0.2), mode: .easeOut)
+        let group = SKAction.group([move, fade, scale])
+        if let completion {
+            cardNode.run(.sequence([group, .run(completion)]), withKey: "overlayIn")
+        } else {
+            cardNode.run(group, withKey: "overlayIn")
+        }
+    }
+
+    static func animateOverlayOut(dimNode: SKSpriteNode, cardNode: SKSpriteNode, restPosition: CGPoint, completion: (() -> Void)? = nil) {
+        dimNode.removeAllActions()
+        cardNode.removeAllActions()
+
+        dimNode.run(timed(.fadeOut(withDuration: 0.14), mode: .easeIn))
+
+        let exitPosition = CGPoint(x: restPosition.x, y: restPosition.y - 8)
+        let move = timed(.move(to: exitPosition, duration: 0.14), mode: .easeIn)
+        let fade = timed(.fadeOut(withDuration: 0.14), mode: .easeIn)
+        let scale = timed(.scale(to: 0.988, duration: 0.14), mode: .easeIn)
+        let group = SKAction.group([move, fade, scale])
+        if let completion {
+            cardNode.run(.sequence([group, .run(completion)]), withKey: "overlayOut")
+        } else {
+            cardNode.run(group, withKey: "overlayOut")
+        }
+    }
+
+    private static func timed(_ action: SKAction, mode: SKActionTimingMode) -> SKAction {
+        action.timingMode = mode
+        return action
+    }
+}
+
 struct NeonFactory {
     static func backgroundNode(size: CGSize, theme: MazeTheme? = nil) -> SKSpriteNode {
         let colors = backgroundColors(for: theme)
@@ -39,6 +110,10 @@ struct NeonFactory {
             return [SKColor(red: 0.05, green: 0.08, blue: 0.16, alpha: 1.0), SKColor(red: 0.12, green: 0.16, blue: 0.28, alpha: 1.0)]
         case .ember:
             return [SKColor(red: 0.12, green: 0.04, blue: 0.06, alpha: 1.0), SKColor(red: 0.22, green: 0.08, blue: 0.08, alpha: 1.0)]
+        case .nightSignal:
+            return [SKColor(red: 0.03, green: 0.04, blue: 0.10, alpha: 1.0), SKColor(red: 0.08, green: 0.11, blue: 0.22, alpha: 1.0)]
+        case .prismShift:
+            return [SKColor(red: 0.08, green: 0.06, blue: 0.12, alpha: 1.0), SKColor(red: 0.18, green: 0.12, blue: 0.24, alpha: 1.0)]
         }
     }
 

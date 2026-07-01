@@ -1,0 +1,13 @@
+{
+  "images" : [
+    {
+      "filename" : "time_bonus.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

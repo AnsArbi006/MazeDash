@@ -6,6 +6,7 @@ enum MazeSolvability {
         let direction: MoveDirection
         let hasKey: Bool
         let switchActive: Bool
+        let breakHits: [UInt8]
     }
 
     struct Analysis {
@@ -19,7 +20,9 @@ enum MazeSolvability {
         let rows: Int
         let cols: Int
         let exit: GridPoint
+        let exitRequiresKey: Bool
         let teleporterPairs: [GridPoint: GridPoint]
+        let breakableIndices: [GridPoint: Int]
     }
 
     private struct Transition {
@@ -169,18 +172,21 @@ enum MazeSolvability {
             rows: rows,
             cols: cols,
             exit: exit,
-            teleporterPairs: buildTeleporterPairs(grid: grid)
+            exitRequiresKey: grid.contains { row in row.contains("K") || row.contains("D") },
+            teleporterPairs: buildTeleporterPairs(grid: grid),
+            breakableIndices: buildBreakableIndices(grid: grid)
         )
 
         let initialHasKey = keyStatus(at: start, hasKey: false, context: context)
         let initialSwitchActive = switchStatus(at: start, switchActive: false, context: context)
+        let initialBreakHits = Array(repeating: UInt8(0), count: context.breakableIndices.count)
         var visited = Set<State>()
         var queue: [State] = []
         var index = 0
         var reachablePoints = Set<GridPoint>([start])
 
-        for direction in validDirections(from: start, hasKey: initialHasKey, switchActive: initialSwitchActive, context: context) {
-            let state = State(point: start, direction: direction, hasKey: initialHasKey, switchActive: initialSwitchActive)
+        for direction in validDirections(from: start, hasKey: initialHasKey, switchActive: initialSwitchActive, breakHits: initialBreakHits, context: context) {
+            let state = State(point: start, direction: direction, hasKey: initialHasKey, switchActive: initialSwitchActive, breakHits: initialBreakHits)
             if visited.insert(state).inserted {
                 queue.append(state)
             }
@@ -216,6 +222,156 @@ enum MazeSolvability {
         analyze(grid: grid.map { Array($0) }, start: start, exit: exit)
     }
 
+    static func requiresBreakableUse(grid: [[Character]], start: GridPoint, exit: GridPoint) -> Bool {
+        var blockedGrid = grid
+        var hasBreakable = false
+
+        for row in 0..<blockedGrid.count {
+            for col in 0..<blockedGrid[row].count where blockedGrid[row][col] == "B" {
+                blockedGrid[row][col] = "#"
+                hasBreakable = true
+            }
+        }
+
+        guard hasBreakable else { return false }
+        return !isSolvable(grid: blockedGrid, start: start, exit: exit)
+    }
+
+    static func requiresSwitchBlockUse(grid: [[Character]], start: GridPoint, exit: GridPoint) -> Bool {
+        var blockedGrid = grid
+        var hasSwitchBlock = false
+        var hasSwitch = false
+
+        for row in 0..<blockedGrid.count {
+            for col in 0..<blockedGrid[row].count {
+                switch blockedGrid[row][col] {
+                case "X":
+                    blockedGrid[row][col] = "#"
+                    hasSwitchBlock = true
+                case "T":
+                    hasSwitch = true
+                default:
+                    break
+                }
+            }
+        }
+
+        guard hasSwitch, hasSwitchBlock else { return false }
+        return !isSolvable(grid: blockedGrid, start: start, exit: exit)
+    }
+
+    static func hasReachableSinkState(grid: [[Character]], start: GridPoint, exit: GridPoint) -> Bool {
+        let analysis = analyze(grid: grid, start: start, exit: exit)
+        guard analysis.solvable else { return true }
+
+        let rows = grid.count
+        let cols = grid.first?.count ?? 0
+        guard rows > 0, cols > 0 else { return true }
+
+        let context = Context(
+            grid: grid,
+            rows: rows,
+            cols: cols,
+            exit: exit,
+            exitRequiresKey: grid.contains { row in row.contains("K") || row.contains("D") },
+            teleporterPairs: buildTeleporterPairs(grid: grid),
+            breakableIndices: buildBreakableIndices(grid: grid)
+        )
+
+        for state in analysis.visitedStates {
+            if state.point == exit { continue }
+            if nextTransitions(from: state, context: context).isEmpty {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    static func hasFairBreakableSwitchCombo(grid: [[Character]], start: GridPoint, exit: GridPoint) -> Bool {
+        let hasBreakable = grid.contains { row in row.contains("B") }
+        let hasSwitch = grid.contains { row in row.contains("T") || row.contains("X") }
+        guard hasBreakable && hasSwitch else { return true }
+
+        let analysis = analyze(grid: grid, start: start, exit: exit)
+        guard analysis.solvable else { return false }
+        guard !hasReachableSinkState(grid: grid, start: start, exit: exit) else { return false }
+
+        for row in 0..<grid.count {
+            for col in 0..<grid[row].count where grid[row][col] == "T" {
+                let point = GridPoint(row: row, col: col)
+                guard analysis.reachablePoints.contains(point) else { return false }
+            }
+        }
+
+        for row in 0..<grid.count {
+            for col in 0..<grid[row].count where grid[row][col] == "B" {
+                let point = GridPoint(row: row, col: col)
+                let hasReachableAdjacency = MoveDirection.allCases.contains { direction in
+                    analysis.reachablePoints.contains(point.moved(by: direction))
+                }
+                guard hasReachableAdjacency else { return false }
+            }
+        }
+
+        return true
+    }
+
+    static func canApproachLockedExitWithoutKey(grid: [[Character]], start: GridPoint, exit: GridPoint) -> Bool {
+        let rows = grid.count
+        let cols = grid.first?.count ?? 0
+        guard rows > 0, cols > 0 else { return false }
+        guard grid.contains(where: { row in row.contains("K") }) else { return false }
+
+        let context = Context(
+            grid: grid,
+            rows: rows,
+            cols: cols,
+            exit: exit,
+            exitRequiresKey: true,
+            teleporterPairs: buildTeleporterPairs(grid: grid),
+            breakableIndices: buildBreakableIndices(grid: grid)
+        )
+
+        let initialHasKey = false
+        let initialSwitchActive = switchStatus(at: start, switchActive: false, context: context)
+        let initialBreakHits = Array(repeating: UInt8(0), count: context.breakableIndices.count)
+        var visited = Set<State>()
+        var queue: [State] = []
+        var index = 0
+
+        if isAdjacentToExit(start, exit: exit) {
+            return true
+        }
+
+        for direction in validDirections(from: start, hasKey: initialHasKey, switchActive: initialSwitchActive, breakHits: initialBreakHits, context: context) {
+            let state = State(point: start, direction: direction, hasKey: initialHasKey, switchActive: initialSwitchActive, breakHits: initialBreakHits)
+            if visited.insert(state).inserted {
+                queue.append(state)
+            }
+        }
+
+        while index < queue.count {
+            let state = queue[index]
+            index += 1
+
+            if !state.hasKey, isAdjacentToExit(state.point, exit: exit) {
+                return true
+            }
+
+            for transition in nextTransitions(from: state, context: context) {
+                if !transition.nextState.hasKey, isAdjacentToExit(transition.nextState.point, exit: exit) {
+                    return true
+                }
+                if visited.insert(transition.nextState).inserted {
+                    queue.append(transition.nextState)
+                }
+            }
+        }
+
+        return false
+    }
+
     static func shortestCompletionSteps(grid: [String], start: GridPoint, exit: GridPoint) -> Int? {
         shortestCompletionSteps(grid: grid.map { Array($0) }, start: start, exit: exit)
     }
@@ -232,13 +388,16 @@ enum MazeSolvability {
             rows: rows,
             cols: cols,
             exit: exit,
-            teleporterPairs: buildTeleporterPairs(grid: gridCharacters)
+            exitRequiresKey: gridCharacters.contains { row in row.contains("K") || row.contains("D") },
+            teleporterPairs: buildTeleporterPairs(grid: gridCharacters),
+            breakableIndices: buildBreakableIndices(grid: gridCharacters)
         )
 
         var point = start
         var facing: MoveDirection?
         var hasKey = keyStatus(at: start, hasKey: false, context: context)
         var switchActive = switchStatus(at: start, switchActive: false, context: context)
+        var breakHits = Array(repeating: UInt8(0), count: context.breakableIndices.count)
         var loopTracker = EasyBotLoopTracker()
         loopTracker.seed(at: start, facing: nil)
 
@@ -249,12 +408,13 @@ enum MazeSolvability {
                 facing: facing,
                 hasKey: hasKey,
                 switchActive: switchActive,
+                breakHits: breakHits,
                 context: context
             )
             guard let direction = loopTracker.chooseDirection(from: point, facing: facing, candidates: candidates) else {
                 return nil
             }
-            guard let transition = advance(from: point, direction: direction, hasKey: hasKey, switchActive: switchActive, context: context) else {
+            guard let transition = advance(from: point, direction: direction, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context) else {
                 return nil
             }
             let previousPoint = point
@@ -262,6 +422,7 @@ enum MazeSolvability {
             facing = direction
             hasKey = transition.nextState.hasKey
             switchActive = transition.nextState.switchActive
+            breakHits = transition.nextState.breakHits
             loopTracker.recordMove(from: previousPoint, to: point, facing: facing)
             if point == exit {
                 return step
@@ -274,20 +435,21 @@ enum MazeSolvability {
     private static func nextTransitions(from state: State, context: Context) -> [Transition] {
         let currentPoint = state.point
         let currentHasKey = keyStatus(at: currentPoint, hasKey: state.hasKey, context: context)
-        let currentSwitchActive = switchStatus(at: currentPoint, switchActive: state.switchActive, context: context)
+        let currentSwitchActive = state.switchActive
+        let currentBreakHits = state.breakHits
 
         let candidateDirections: [MoveDirection]
         if let forced = arrowDirection(at: currentPoint, context: context) {
-            if canEnter(currentPoint.moved(by: forced), hasKey: currentHasKey, switchActive: currentSwitchActive, context: context) {
+            if canAttempt(currentPoint.moved(by: forced), hasKey: currentHasKey, switchActive: currentSwitchActive, breakHits: currentBreakHits, context: context) {
                 candidateDirections = [forced]
             } else {
-                candidateDirections = validDirections(from: currentPoint, hasKey: currentHasKey, switchActive: currentSwitchActive, context: context)
+                candidateDirections = validDirections(from: currentPoint, hasKey: currentHasKey, switchActive: currentSwitchActive, breakHits: currentBreakHits, context: context)
             }
         } else {
             let forward = currentPoint.moved(by: state.direction)
-            if isDecisionTile(currentPoint, hasKey: currentHasKey, switchActive: currentSwitchActive, context: context) ||
-                !canEnter(forward, hasKey: currentHasKey, switchActive: currentSwitchActive, context: context) {
-                candidateDirections = validDirections(from: currentPoint, hasKey: currentHasKey, switchActive: currentSwitchActive, context: context)
+            if isDecisionTile(currentPoint, hasKey: currentHasKey, switchActive: currentSwitchActive, breakHits: currentBreakHits, context: context) ||
+                !canAttempt(forward, hasKey: currentHasKey, switchActive: currentSwitchActive, breakHits: currentBreakHits, context: context) {
+                candidateDirections = validDirections(from: currentPoint, hasKey: currentHasKey, switchActive: currentSwitchActive, breakHits: currentBreakHits, context: context)
             } else {
                 candidateDirections = [state.direction]
             }
@@ -295,7 +457,7 @@ enum MazeSolvability {
 
         var transitions: [Transition] = []
         for direction in candidateDirections {
-            guard let transition = advance(from: currentPoint, direction: direction, hasKey: currentHasKey, switchActive: currentSwitchActive, context: context) else {
+            guard let transition = advance(from: currentPoint, direction: direction, hasKey: currentHasKey, switchActive: currentSwitchActive, breakHits: currentBreakHits, context: context) else {
                 continue
             }
             transitions.append(transition)
@@ -303,9 +465,15 @@ enum MazeSolvability {
         return transitions
     }
 
-    private static func advance(from point: GridPoint, direction: MoveDirection, hasKey: Bool, switchActive: Bool, context: Context) -> Transition? {
+    private static func advance(from point: GridPoint, direction: MoveDirection, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], context: Context) -> Transition? {
         let next = point.moved(by: direction)
-        guard canEnter(next, hasKey: hasKey, switchActive: switchActive, context: context) else {
+        if let breakableIndex = context.breakableIndices[next], breakHits[breakableIndex] < 3 {
+            var nextBreakHits = breakHits
+            nextBreakHits[breakableIndex] = min(3, nextBreakHits[breakableIndex] + 1)
+            let nextState = State(point: point, direction: direction, hasKey: hasKey, switchActive: switchActive, breakHits: nextBreakHits)
+            return Transition(nextState: nextState, touchedPoints: [])
+        }
+        guard canEnter(next, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context) else {
             return nil
         }
 
@@ -313,7 +481,6 @@ enum MazeSolvability {
         var touchedPoints: [GridPoint] = [next]
         var nextHasKey = keyStatus(at: next, hasKey: hasKey, context: context)
         var nextSwitchActive = switchStatus(at: next, switchActive: switchActive, context: context)
-
         if let teleported = context.teleporterPairs[next] {
             destination = teleported
             touchedPoints.append(teleported)
@@ -321,7 +488,7 @@ enum MazeSolvability {
             nextSwitchActive = switchStatus(at: teleported, switchActive: nextSwitchActive, context: context)
         }
 
-        let nextState = State(point: destination, direction: direction, hasKey: nextHasKey, switchActive: nextSwitchActive)
+        let nextState = State(point: destination, direction: direction, hasKey: nextHasKey, switchActive: nextSwitchActive, breakHits: breakHits)
         return Transition(nextState: nextState, touchedPoints: touchedPoints)
     }
 
@@ -336,13 +503,16 @@ enum MazeSolvability {
             rows: rows,
             cols: cols,
             exit: exit,
-            teleporterPairs: buildTeleporterPairs(grid: grid)
+            exitRequiresKey: grid.contains { row in row.contains("K") || row.contains("D") },
+            teleporterPairs: buildTeleporterPairs(grid: grid),
+            breakableIndices: buildBreakableIndices(grid: grid)
         )
 
         let startHasKey = keyStatus(at: start, hasKey: false, context: context)
         let startSwitchActive = switchStatus(at: start, switchActive: false, context: context)
-        let startStates = validDirections(from: start, hasKey: startHasKey, switchActive: startSwitchActive, context: context).map {
-            State(point: start, direction: $0, hasKey: startHasKey, switchActive: startSwitchActive)
+        let startBreakHits = Array(repeating: UInt8(0), count: context.breakableIndices.count)
+        let startStates = validDirections(from: start, hasKey: startHasKey, switchActive: startSwitchActive, breakHits: startBreakHits, context: context).map {
+            State(point: start, direction: $0, hasKey: startHasKey, switchActive: startSwitchActive, breakHits: startBreakHits)
         }
 
         guard !startStates.isEmpty else { return nil }
@@ -371,17 +541,29 @@ enum MazeSolvability {
         return nil
     }
 
-    private static func canEnter(_ point: GridPoint, hasKey: Bool, switchActive: Bool, context: Context) -> Bool {
+    private static func canEnter(_ point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], context: Context) -> Bool {
         guard let tile = tile(at: point, context: context) else { return false }
         if tile == "#" { return false }
-        if tile == "D" { return hasKey || switchActive }
+        if tile == "E", context.exitRequiresKey { return hasKey }
+        if tile == "X" { return switchActive }
+        if tile == "B", let breakableIndex = context.breakableIndices[point] {
+            return breakHits[breakableIndex] >= 3
+        }
         // Gates are solvable in principle because the player can wait and retry on an open phase.
         return true
     }
 
-    private static func validDirections(from point: GridPoint, hasKey: Bool, switchActive: Bool, context: Context) -> [MoveDirection] {
+    private static func canAttempt(_ point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], context: Context) -> Bool {
+        guard let tile = tile(at: point, context: context) else { return false }
+        if tile == "B", let breakableIndex = context.breakableIndices[point], breakHits[breakableIndex] < 3 {
+            return true
+        }
+        return canEnter(point, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context)
+    }
+
+    private static func validDirections(from point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], context: Context) -> [MoveDirection] {
         MoveDirection.allCases.filter { direction in
-            canEnter(point.moved(by: direction), hasKey: hasKey, switchActive: switchActive, context: context)
+            canAttempt(point.moved(by: direction), hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context)
         }
     }
 
@@ -390,32 +572,33 @@ enum MazeSolvability {
         facing: MoveDirection?,
         hasKey: Bool,
         switchActive: Bool,
+        breakHits: [UInt8],
         context: Context
     ) -> [MoveDirection] {
         if let forced = arrowDirection(at: point, context: context),
-           canEnter(point.moved(by: forced), hasKey: hasKey, switchActive: switchActive, context: context) {
+           canAttempt(point.moved(by: forced), hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context) {
             return [forced]
         }
 
         if let facing {
             let forward = point.moved(by: facing)
-            if canEnter(forward, hasKey: hasKey, switchActive: switchActive, context: context),
-               !isDecisionTile(point, hasKey: hasKey, switchActive: switchActive, context: context) {
+            if canAttempt(forward, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context),
+               !isDecisionTile(point, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context) {
                 return [facing]
             }
             let ordered = [leftTurn(from: facing), facing, rightTurn(from: facing), opposite(of: facing)]
             return ordered.filter {
-                canEnter(point.moved(by: $0), hasKey: hasKey, switchActive: switchActive, context: context)
+                canAttempt(point.moved(by: $0), hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context)
             }
         }
 
         return [.left, .up, .right, .down].filter {
-            canEnter(point.moved(by: $0), hasKey: hasKey, switchActive: switchActive, context: context)
+            canAttempt(point.moved(by: $0), hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context)
         }
     }
 
-    private static func isDecisionTile(_ point: GridPoint, hasKey: Bool, switchActive: Bool, context: Context) -> Bool {
-        let directions = validDirections(from: point, hasKey: hasKey, switchActive: switchActive, context: context)
+    private static func isDecisionTile(_ point: GridPoint, hasKey: Bool, switchActive: Bool, breakHits: [UInt8], context: Context) -> Bool {
+        let directions = validDirections(from: point, hasKey: hasKey, switchActive: switchActive, breakHits: breakHits, context: context)
         let count = directions.count
         if count >= 3 {
             return true
@@ -435,8 +618,12 @@ enum MazeSolvability {
         hasKey || tile(at: point, context: context) == "K"
     }
 
+    private static func isAdjacentToExit(_ point: GridPoint, exit: GridPoint) -> Bool {
+        abs(point.row - exit.row) + abs(point.col - exit.col) == 1
+    }
+
     private static func switchStatus(at point: GridPoint, switchActive: Bool, context: Context) -> Bool {
-        switchActive || tile(at: point, context: context) == "T"
+        tile(at: point, context: context) == "T" ? !switchActive : switchActive
     }
 
     private static func tile(at point: GridPoint, context: Context) -> Character? {
@@ -508,9 +695,21 @@ enum MazeSolvability {
         return pairs
     }
 
+    private static func buildBreakableIndices(grid: [[Character]]) -> [GridPoint: Int] {
+        var mapping: [GridPoint: Int] = [:]
+        var nextIndex = 0
+        for row in 0..<grid.count {
+            for col in 0..<grid[row].count where grid[row][col] == "B" {
+                mapping[GridPoint(row: row, col: col)] = nextIndex
+                nextIndex += 1
+            }
+        }
+        return mapping
+    }
+
     private static func isTeleporterTile(_ tile: Character) -> Bool {
         switch tile {
-        case "#", ".", "S", "E", "O", "K", "D", "G", "T", "^", "v", "<", ">":
+        case "#", ".", "S", "E", "O", "K", "D", "G", "T", "B", "X", "^", "v", "<", ">":
             return false
         default:
             return String(tile).rangeOfCharacter(from: CharacterSet.letters) != nil

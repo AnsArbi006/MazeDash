@@ -170,10 +170,14 @@ final class LevelSelectScene: SKScene {
         levelCards.forEach { $0.removeFromParent() }
         levelCards.removeAll()
 
+        let nextPlayableLevelId = ProgressStore.shared.nextPlayableLevelId
         for level in LevelStore.levels {
             let progress = ProgressStore.shared.progress(for: level.id)
             let card = LevelCardNode(level: level, progress: progress, size: CGSize(width: 160, height: 100))
-            card.setLocked(!isLevelUnlocked(levelId: level.id))
+            let isLocked = !isLevelUnlocked(levelId: level.id)
+            let isCompleted = progress.bestTime != nil || progress.stars > 0
+            let isCurrent = !isLocked && level.id == nextPlayableLevelId
+            card.setVisualState(isLocked: isLocked, isCurrent: isCurrent, isCompleted: isCompleted)
             card.setTheme(ThemeUnlocker.theme(for: level.id))
             levelCards.append(card)
             scrollContainer.contentNode.addChild(card)
@@ -234,8 +238,23 @@ final class LevelSelectScene: SKScene {
             let chipSize = snapSize(CGSize(width: width, height: height))
             chip.texture = TextureFactory.shared.cardTexture(size: chipSize, style: .hud)
             chip.size = chipSize
-            chip.color = SKColor(white: 0.0, alpha: 1.0)
-            chip.colorBlendFactor = 0.08
+            switch index {
+            case 0:
+                chip.color = ArcadeStyle.Color.accentYellow.withAlphaComponent(0.34)
+                chip.colorBlendFactor = 0.18
+                statPrimaryLabels[index].fontColor = ArcadeStyle.Color.accentYellow
+                statSecondaryLabels[index].fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.88)
+            case 1:
+                chip.color = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.18)
+                chip.colorBlendFactor = 0.12
+                statPrimaryLabels[index].fontColor = ArcadeStyle.Color.textPrimary
+                statSecondaryLabels[index].fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.76)
+            default:
+                chip.color = ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.16)
+                chip.colorBlendFactor = 0.12
+                statPrimaryLabels[index].fontColor = ArcadeStyle.Color.textPrimary
+                statSecondaryLabels[index].fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.76)
+            }
             chip.position = snap(CGPoint(x: x, y: y))
 
             let primaryShadow = statPrimaryShadows[index]
@@ -408,6 +427,7 @@ final class LevelSelectScene: SKScene {
         case .hard:
             button.setAccentColor(ArcadeStyle.Color.accentMagenta)
         }
+        button.label.fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(difficulty == .off ? 0.76 : 0.9)
     }
 
     private func updateSafeAreaInsets() {

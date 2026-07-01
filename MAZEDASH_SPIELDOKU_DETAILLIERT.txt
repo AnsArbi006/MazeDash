@@ -1,0 +1,1097 @@
+MAZEDASH - VOLLSTAENDIGE SPIELDOKUMENTATION
+Stand des Projekts in dieser Worktree-Version
+Pfad: Repository-Root
+
+Zweck dieser Datei:
+Diese Datei beschreibt das Spiel sehr detailliert in normaler Sprache. Sie soll den kompletten aktuellen Stand des Spiels festhalten:
+- Spielidee
+- Modi
+- Story-Struktur
+- Gimmicks
+- UI und UX
+- Menues
+- Result-Screens
+- Bots
+- Daily Challenge
+- Time Challenge
+- Shop
+- Cosmetics
+- Rewards
+- Achievements
+- Audio
+- Werbung
+- technische Kernsysteme
+
+==================================================
+1. GRUNDIDEE DES SPIELS
+==================================================
+
+MazeDash ist ein schnelles Neon-Arcade-Maze-Spiel.
+Der Kern des Spiels ist:
+- ein Maze lesen
+- schnell entscheiden
+- sauber durch den Pfad fahren
+- den Exit erreichen
+- dabei moeglichst wenig Fehler machen
+- bessere Zeiten und mehr Sterne holen
+
+Das Spiel ist kein ruhiges Puzzle mit langen Wartezeiten.
+Es ist eher:
+- schnell
+- direkt
+- kompakt
+- reaktionsstark
+- wiederholbar
+
+Die Hauptsaeulen sind:
+- Route lesen
+- Commitment
+- Gimmicks lernen
+- Bestzeiten verbessern
+- Sterne sammeln
+- Progression und Unlocks
+
+
+==================================================
+2. VISUELLE IDENTITAET
+==================================================
+
+Die visuelle Identitaet des Spiels ist:
+- dunkler futuristischer Hintergrund
+- Neon-Farben
+- Cyan, Magenta, Gelb und Gruen als wichtige Akzente
+- glossy Arcade-Flaechen
+- technische Karten und Panels
+- kompakte HUD-Elemente
+- klare Glow-Hierarchie
+
+Das Ziel der UI ist:
+- futuristisch
+- lesbar
+- kompakt
+- premium
+- nicht chaotisch
+
+
+==================================================
+3. HAUPTMODI DES SPIELS
+==================================================
+
+Es gibt aktuell vier Hauptbereiche:
+
+3.1 Story Mode
+- der strukturierte Hauptmodus
+- feste Story-Level
+- Sterne pro Level
+- Bestzeit pro Level
+- Progression
+- Freischaltungen
+
+3.2 Time Challenge
+- Zeitmodus
+- in einer festen Zeit moeglichst viele Mazes schaffen
+- 1 Minute
+- 2 Minuten
+- 3 Minuten
+
+3.3 Daily Challenge
+- taegliche Challenge
+- ein fester Maze pro Tag
+- gegen einen Bot
+- Rewards in Coins
+
+3.4 Shop
+- Cosmetics
+- Coins aus Gameplay
+- keine Echtgeldkaeufe
+
+
+==================================================
+4. SPIELERSTEUERUNG
+==================================================
+
+Die Steuerung basiert auf Swipes.
+
+Moegliche Richtungen:
+- oben
+- unten
+- links
+- rechts
+
+Wichtige Punkte:
+- die Bewegung ist deterministisch
+- der Spieler gibt eine Richtung vor
+- die Maze-Logik entscheidet dann, wie diese Richtung mit den aktiven Gimmicks zusammenspielt
+
+Es gibt ausserdem:
+- Pause-Button
+- Overview / MiniMap-Unterstuetzung
+- Result-Buttons
+- Menuebuttons in den Shell-Screens
+
+
+==================================================
+5. STORY-STRUKTUR
+==================================================
+
+Die Story ist intern jetzt kapitelbasiert aufgebaut.
+Jedes Kapitel hat 10 Level.
+
+Aktuelle Kapitel:
+
+Kapitel 01 - Level 1 bis 10
+Titel: MAZE BASICS
+Gimmicks:
+- keine
+Lernziel:
+- Grundbewegung
+- sauberes Maze-Lesen
+- Geschwindigkeit
+
+Kapitel 02 - Level 11 bis 20
+Titel: ONE-WAY SYSTEM
+Gimmicks:
+- One-Way
+Lernziel:
+- Commitment
+- Pfeil-/Einbahnlogik verstehen
+
+Kapitel 03 - Level 21 bis 30
+Titel: BREAKABLE PATHS
+Gimmicks:
+- Breakable Blocks
+Lernziel:
+- kaputtbare Bloecke bewusst einsetzen
+- Route aufbrechen
+
+Kapitel 04 - Level 31 bis 40
+Titel: TELEPORT NETWORK
+Gimmicks:
+- Teleporter
+Lernziel:
+- Portalbeziehungen lesen
+- verbundene Raeume verstehen
+
+Kapitel 05 - Level 41 bis 50
+Titel: SWITCH LOGIC
+Gimmicks:
+- Switches / Toggle Blocks
+Lernziel:
+- Ursache und Wirkung
+- Routen durch Schalterzustand aendern
+
+Kapitel 06 - Level 51 bis 60
+Titel: KEY SYSTEM
+Gimmicks:
+- Key / Locked Exit
+Lernziel:
+- Exit ist gesperrt
+- Schluessel wird zuerst gebraucht
+
+Kapitel 07 - Level 61 bis 70
+Titel: FOG ZONE
+Gimmicks:
+- Fog
+Lernziel:
+- Sicht eingeschraenkt
+- Orientierung und Erinnerung
+
+Kapitel 08 - Level 71 bis 80
+Titel: VECTOR SHIFT
+Gimmicks:
+- One-Way + Teleporter
+Lernziel:
+- Commitment und Raumverschiebung zusammen
+
+Kapitel 09 - Level 81 bis 90
+Titel: BREACH CONTROL
+Gimmicks:
+- Switches + Breakables
+Lernziel:
+- Schalter setzen und dann Route aufbrechen
+
+Kapitel 10 - Level 91 bis 100
+Titel: BLACKOUT PORTALS
+Gimmicks:
+- Fog + Teleporter
+Lernziel:
+- Orientierung unter Sichtdruck
+
+
+==================================================
+6. WICHTIGER HINWEIS ZUR STORY-UI
+==================================================
+
+Die Story-Struktur ist intern inzwischen kapitelbasiert.
+Die sichtbare Level-Select-UI ist aber derzeit wieder auf dem alten 1.0-artigen Grid-Pfad, weil User-Feedback diesen Stil besser fand.
+
+Das bedeutet:
+- inhaltlich ist die Story klar in Kapitel strukturiert
+- visuell im Level-Select sieht der Spieler aktuell noch ein direktes Level-Grid
+
+
+==================================================
+7. SCHWIERIGKEITSKURVE DER STORY
+==================================================
+
+Innerhalb jedes 10er-Kapitels gilt das Ziel:
+
+Level 1 bis 3 des Kapitels:
+- sehr einfach
+- Gimmick kennenlernen
+- wenig Komplexitaet
+
+Level 4 bis 7:
+- mittlere Schwierigkeit
+- erste echte Anwendung
+- mehr Verzweigungen
+
+Level 8 bis 10:
+- schwerer
+- dichtere Layouts
+- staerkere Nutzung des Kapitelsystems
+
+Ziel der Kurve:
+- keine zufaelligen Difficulty-Spikes
+- keine chaotische Ueberladung
+- erst lernen, dann anwenden, dann meistern
+
+
+==================================================
+8. ALLE AKTUELLEN GIMMICKS
+==================================================
+
+Aktuell im Projekt vorhanden:
+- One-Way
+- Breakable Walls
+- Switch Blocks
+- Keys / Locked Exit
+- Teleporters
+- Timing Gates
+- Fog
+- Moving Blocks
+- Chaser Enemy
+
+
+==================================================
+9. ONE-WAY
+==================================================
+
+Beschreibung:
+- Richtungsgebundene Tiles
+- zwingen oder begrenzen die Bewegung
+
+Gameplay-Rolle:
+- Commitment
+- Route im Voraus lesen
+- Fehlentscheidungen bestrafen, aber fair
+
+
+==================================================
+10. BREAKABLE WALLS
+==================================================
+
+Beschreibung:
+- sichtbare kaputtbare Bloecke
+- muessen mehrfach getroffen werden
+
+Gameplay-Rolle:
+- aktive Route oeffnen
+- nicht nur lesen, sondern eingreifen
+
+Wichtig:
+- Breakable-Level werden validiert, damit die Breakables wirklich gebraucht werden
+
+
+==================================================
+11. SWITCH BLOCKS
+==================================================
+
+Beschreibung:
+- Bodenschalter
+- Toggle-Block-Zustaende
+
+Gameplay-Rolle:
+- Ursache und Wirkung
+- globaler oder teil-globaler Zustandswechsel
+
+Wichtig:
+- Switch-Level werden validiert, damit mindestens eine echte Schalterbenutzung noetig ist
+- Text auf den Bloecken wurde entfernt, damit es mehr nach Gameplay-Element und weniger nach Debug-Symbol aussieht
+
+
+==================================================
+12. KEYS / LOCKED EXIT
+==================================================
+
+Das alte separate Door-Tile ist nicht mehr der sichtbare Fokus.
+Die aktuelle Logik ist:
+- das Ziel ist gesperrt
+- ohne Schluessel kann man den Exit nicht benutzen
+- man muss erst den Schluessel holen
+
+Wenn der Schluessel geholt wird:
+- das Schloss am Ziel verschwindet
+- der Schluessel fliegt bzw. folgt hinter dem Spieler
+
+Wichtige letzte Aenderungen:
+- der Schluessel wurde visuell von einem Buchstaben wegbewegt
+- die Schloss-/Key-Lesbarkeit war ein aktiver Feinschliffpunkt
+
+
+==================================================
+13. TELEPORTER
+==================================================
+
+Beschreibung:
+- Portal-Paare
+- transportieren Spieler oder Bot zwischen zwei verbundenen Punkten
+
+Gameplay-Rolle:
+- Raumlogik aendern
+- Loops und Ueberraschungsrouten erzeugen
+- Orientierung fordern
+
+
+==================================================
+14. TIMING GATES
+==================================================
+
+Beschreibung:
+- periodisch offene und geschlossene Barrieren
+
+Gameplay-Rolle:
+- Timing-Druck
+- Rhythmus beim Pfad
+
+Nutzung:
+- eher als Zusatzmechanik in passenden Modi
+
+
+==================================================
+15. FOG
+==================================================
+
+Beschreibung:
+- Sicht ist eingeschraenkt
+- nur Teile des Mazes sind klar sichtbar
+
+Gameplay-Rolle:
+- Orientierung
+- Erinnern
+- Druck durch Unsicherheit
+
+
+==================================================
+16. MOVING BLOCKS
+==================================================
+
+Neue Mechanik.
+
+Aktuelles Verhalten:
+- lineare Bewegung
+- horizontal oder vertikal
+- konstante Geschwindigkeit
+- back-and-forth zwischen zwei Punkten
+- deterministisch
+- keine Zufallslogik
+
+Gameplay-Rolle:
+- Timing-Challenge
+- Raumkontrolle
+- Warten oder Umrouten
+
+Wichtiger Punkt:
+- aktuell zuerst im Challenge-Pfad integriert, nicht als vollwertiges Story-Kapitel
+
+
+==================================================
+17. CHASER ENEMY
+==================================================
+
+Neue Mechanik.
+
+Typen:
+- direct chaser
+- delayed chaser
+
+Regeln:
+- langsamer als der Spieler
+- nicht sofort perfekt reaktiv
+- Delay bei Reaktion
+- darf keine unfairen No-Escape-Situationen erzwingen
+
+Failure-Zustand:
+- wenn der Chaser den Spieler erreicht, scheitert der Run
+
+Wichtiger Punkt:
+- aktuell zuerst im Challenge-Pfad integriert, nicht als vollwertiges Story-Kapitel
+
+
+==================================================
+18. MAZE-GENERIERUNG
+==================================================
+
+Das Spiel arbeitet mit LevelConfig-basierten Parametern.
+
+Ein LevelConfig kann enthalten:
+- Maze-Groesse
+- Loop-Faktor
+- Branch-Faktor
+- Orb-Anzahl
+- aktivierte Mechaniken
+- Fog-Radius
+- Gate-Period
+- Teleporter-Paare
+- Schluessel-Anzahl
+- Switch-Anzahl
+- Breakable-Anzahl
+- Toggle-Block-Anzahl
+- One-Way-Dichte
+- Moving-Block-Anzahl
+- Chaser-Verhalten
+
+Das Ziel ist:
+- nicht nur zufaellig schwer
+- sondern kontrolliert generiert
+
+
+==================================================
+19. FAIRNESS-SYSTEME
+==================================================
+
+Bereits vorhandene Fairness-Regeln:
+- Breakable-Levels muessen echte Breakable-Nutzung benoetigen
+- Switch-Levels muessen echte Switch-Nutzung benoetigen
+- Moving Blocks sind deterministisch
+- Chaser ist langsamer als der Spieler
+- Challenge-Stapelung wird teilweise bewusst begrenzt
+
+Generelle Designphilosophie:
+- schwer, aber nicht unfair
+- kein Gluecksspiel
+- keine versteckte Zufallsstrafe
+
+
+==================================================
+20. STORY-STERNE UND BESTZEITEN
+==================================================
+
+Story-Level speichern:
+- beste Zeit
+- maximal erreichte Sterne
+
+Sterne gehen von:
+- 0
+- 1
+- 2
+- 3
+
+Aktuelle Schwellenlogik:
+- 1 Stern = easyBotTime
+- 2 Sterne = hardBotTime plus 55% des Abstands zu easy
+- 3 Sterne = hardBotTime * 1.15
+
+Diese Formel wurde bereits fairer gemacht, weil 3 Sterne vorher zu solver-nah und fuer Menschen zu hart waren.
+
+
+==================================================
+21. TIME CHALLENGE
+==================================================
+
+Time Challenge ist der Modus fuer:
+- Druck
+- Ausdauer
+- sauberes Maze-Spielen unter Zeitlimit
+
+Verfuegbare Zeiten:
+- 1 Minute
+- 2 Minuten
+- 3 Minuten
+
+Ziel:
+- so viele Mazes wie moeglich in der Zeit abschliessen
+
+Gespeichert wird:
+- Bestwert pro Dauer
+
+Es gibt dafuer einen eigenen Result-Screen.
+
+
+==================================================
+22. DAILY CHALLENGE
+==================================================
+
+Die Daily Challenge hat:
+- taeglichen Seed / Descriptor
+- Datumsschluessel
+- Referenz-Level-ID
+- Reward-Werte
+- Fortschritt pro Tag
+
+Schwierigkeiten:
+- Easy
+- Hard
+
+Rewards:
+- Easy: 60 Coins
+- Hard: 140 Coins
+
+Gespeichert wird:
+- Bestzeit
+- ob Easy-Reward schon geholt wurde
+- ob Hard-Reward schon geholt wurde
+
+Wenn der Daily-Run gewonnen wird:
+- Reward wird registriert
+- Bestzeit wird registriert
+- neuer Daily-Clear-Endscreen erscheint
+
+
+==================================================
+23. DAILY-CLEAR-ENDSCREEN
+==================================================
+
+Dieser wurde zuletzt gezielt verbessert.
+
+Vorher:
+- Daily-Sieg benutzte nur das generische Result-Popup
+- wenig Reward-Gefuehl
+- wenig Besonderheit
+
+Jetzt:
+- eigener DailyResultOverlayNode
+- klare Headline fuer den Daily-Sieg
+- Bot-Difficulty-Badge
+- grosse Zeitdarstellung
+- Daily-Best-Anzeige
+- Reward-Status als heroischer Reward-Block
+- Retry und Menu als direkte Aktionen
+
+Das macht den Daily-Sieg jetzt deutlich erkennbarer und belohnender.
+
+
+==================================================
+24. BOT-SYSTEM
+==================================================
+
+Bot-Difficulty:
+- Off
+- Easy
+- Hard
+
+Easy Bot:
+- leichte Konkurrenz
+- einfacher zu schlagen
+
+Hard Bot:
+- staerker
+- Benchmark fuer anspruchsvollere Zeiten
+
+Bots werden genutzt in:
+- Daily Challenge
+- Bot-Race-Kontexte
+
+
+==================================================
+25. START-MENUE
+==================================================
+
+Das StartMenu hat aktuell direkte Hauptwege zu:
+- Story
+- Time Challenge
+- Daily
+- Shop
+
+Das Menue nutzt:
+- animierten Hintergrund
+- grosse Arcade-Buttons
+- klare Sekundaerscreens
+
+
+==================================================
+26. CHALLENGE-SELECT-SCREEN
+==================================================
+
+Hier waehlt der Spieler:
+- 1 Minute
+- 2 Minuten
+- 3 Minuten
+
+Jede Karte zeigt:
+- Titel
+- Kurzbeschreibung
+- Bestwert
+
+
+==================================================
+27. DAILY-SELECT-SCREEN
+==================================================
+
+Der Daily-Screen zeigt:
+- taegliche Karte
+- Datum
+- Bestzeit
+- Easy- und Hard-Karte
+- Reward-Werte
+- Status pro Schwierigkeit
+
+Wenn eine Daily-Schwierigkeit schon geschafft/geclaimt wurde:
+- Zustand aendert sich
+- Reveal-/Completion-Animationen koennen abgespielt werden
+
+
+==================================================
+28. SHOP
+==================================================
+
+Der Shop ist in Kategorien aufgeteilt:
+- Colors
+- Patterns
+- Trails
+- Win FX
+- Portals
+
+Der Shop zeigt:
+- Coin-Gesamtstand
+- Rewarded-Ad-Button
+- Status der taeglichen Rewarded-Nutzung
+- die eigentlichen Shop-Items
+
+Wichtige Regeln:
+- nur Gameplay-Coins
+- keine Echtgeld-Kaeufe
+
+
+==================================================
+29. REWARDED SHOP AD
+==================================================
+
+Es gibt im Shop:
+- WATCH AD +30
+
+Regeln:
+- gibt 30 Coins
+- nur bei komplettem Rewarded-Abschluss
+- taegliches Limit: 2
+- kein Reward bei Abbruch / Fehler / keine Ad verfuegbar
+
+Der Shop zeigt:
+- Verfuegbarkeit heute
+- Limit erreicht oder nicht
+
+
+==================================================
+30. SHOP-ITEMS UND COSMETICS
+==================================================
+
+Kategorien:
+- Player
+- Trail
+- Win Animation
+- Teleporter
+
+Jedes Item hat je nach Typ:
+- Display-Name
+- Detailtext
+- Accent-Farbe
+- Preis oder Reward-Level
+- Besitzstatus
+- Equip-Status
+
+
+==================================================
+31. PLAYER-SKINS
+==================================================
+
+Beispiele:
+- Neon Cyan
+- Neon Pink
+- Electric Purple
+- Toxic Green
+- Golden Pulse
+- Grid Core
+- Pulse Core
+- Glitch Skin
+- Energy Stripes
+- Dual Core
+
+
+==================================================
+32. TRAILS
+==================================================
+
+Beispiele:
+- Classic Neon
+- Electric Sparks
+- Smooth Light
+- Pixel Trail
+- Pulse Trail
+- Energy Burst
+- Orbit Trail
+
+
+==================================================
+33. WIN ANIMATIONS
+==================================================
+
+Beispiele:
+- Neon Explosion
+- Energy Implosion
+- Pixel Shatter
+- Shockwave Ring
+- Light Beam Finish
+
+
+==================================================
+34. TELEPORTER-SKINS
+==================================================
+
+Beispiele:
+- Classic Portal
+- Digital Glitch
+- Energy Vortex
+- Split Portal
+- Quantum Portal
+
+
+==================================================
+35. STORY-REWARD-FREISCHALTUNGEN
+==================================================
+
+Aktuell definierte Story-Rewards:
+
+Level 5
+- Golden Pulse
+
+Level 10
+- Grid Core
+
+Level 15
+- Energy Burst
+
+Level 20
+- Light Beam Finish
+
+Level 25
+- Quantum Portal
+
+Level 30
+- Energy Stripes
+
+Level 35
+- Dual Core
+
+
+==================================================
+36. ACHIEVEMENTS
+==================================================
+
+Aktuelle Achievements:
+- FIRST ESCAPE
+- TRIPLE STAR
+- FIVE DOWN
+- FLOW COLLECTOR
+- THEME SHIFT
+- ELITE RUNNER
+
+Diese basieren auf:
+- abgeschlossene Level
+- 3-Sterne-Level
+- Flow-Orbs / Flow-Punkte
+- freigeschaltete Themes
+
+
+==================================================
+37. FLOW UND COMBO
+==================================================
+
+Das Spiel hat eigene Systeme fuer:
+- Combo
+- Flow
+
+Diese beeinflussen:
+- HUD-Reaktionen
+- Bonusanzeige
+- Performance-Gefuehl
+- Belohnung fuer starke Runs
+
+
+==================================================
+38. GAMEPLAY-HUD
+==================================================
+
+Der aktive Gameplay-HUD zeigt je nach Modus:
+- Topbar
+- Level- oder Modus-Info
+- Timer
+- Sterne oder linksseitige Metriken
+- Coins
+- Pause
+
+Bereits eingebaute Verbesserungen:
+- Level-Start-Entrance
+- `LVL` statt kurzem `L`
+- besseres Zeitformat
+
+Aktuelles Zeitformat:
+- unter 60 Sekunden: z.B. 9.05s
+- ab 60 Sekunden: z.B. 1min 05s
+
+
+==================================================
+39. RESULT-SCREENS
+==================================================
+
+Es gibt aktuell mehrere Result-Arten:
+
+Normales Story-Result:
+- Headline
+- Sterne
+- Zeit
+- Stern-Schwellen
+- Buttons
+
+Time-Challenge-Result:
+- mazes completed
+- Duration-Zusammenfassung
+- Bestwert
+- Retry/Menu
+
+Daily-Clear-Result:
+- Daily-Clear-Headline
+- Zeit
+- Daily-Best
+- Reward-Block
+- Retry/Menu
+
+
+==================================================
+40. LEVEL-SELECT
+==================================================
+
+Der aktuelle Level-Select ist:
+- wieder naeher am alten 1.0-Stil
+- direktes Grid
+- kein radikaler Kapitelbrowser
+
+Wichtige sichtbare Punkte:
+- Levelkarten
+- Next / Cleared / Sector / Bot-Chips
+- current level
+- fertig/perfect states
+
+Wichtige letzte User-Wuensche, die eingearbeitet wurden:
+- alte 1.0-Richtung wiederhergestellt
+- `LVL` statt `L`
+- 3-Sterne-Zustand gruen
+- billige gruen-transparente Boxen entfernt
+- Ueberlappungen in den Karten beseitigt
+
+
+==================================================
+41. LEVEL-CARD-ZUSTAENDE
+==================================================
+
+Die Karten sollen aktuell unterscheiden zwischen:
+- Default
+- Completed
+- Perfect / 3 Sterne
+- Current / naechstes Ziel
+
+Perfect-State:
+- gruene Erfolgskennung
+- kein goldener Rand mehr
+
+
+==================================================
+42. AUDIO-SYSTEM
+==================================================
+
+Das Audio-System ist zentral in SoundFX.swift organisiert.
+
+Es deckt u.a. ab:
+- Button Taps
+- Reward Sounds
+- Teleport
+- Win / Loss
+- UI-Transitions
+- Gameplay-Feedback
+
+Das System ist technisch zentralisiert und sauber strukturiert.
+
+
+==================================================
+43. ANIMATIONEN
+==================================================
+
+Es wurde bereits ein groesserer Animations-Pass integriert.
+
+Bereits vorhanden:
+- Level-Start-Entrance
+- Orb-/Pickup-Burst
+- Exit-Aktivierungswelle
+- Switch-Signal
+- Teleport-Warp
+- staerkeres Result-Popup
+- Level-Card-Unlock-Reveal
+- Shop-Reward-Claim-Reaktion
+- Current-Level-Highlight
+- staerkere Button-Confirm-Motion
+
+
+==================================================
+44. SAFE AREA / NOTCH
+==================================================
+
+Wichtige Overlays wurden auf Safe Area angepasst.
+
+Beispiel:
+- Result-Popup respektiert die iPhone-Safe-Area
+- nichts soll ueber Notch oder Dynamic Island liegen
+
+
+==================================================
+45. WERBESYSTEM
+==================================================
+
+Das Spiel hat Ad-Logik fuer:
+- Interstitials
+- Rewarded Ads
+
+Story / Time Challenge:
+- nach 5 abgeschlossenen Runs kann eine Interstitial due werden
+- nur an natuerlichen Uebergaengen
+- wenn keine Ad da ist, wird nichts kaputt blockiert
+
+Rewarded:
+- Shop-only
+- +30 Coins
+- 2 pro Tag
+
+Technischer Stand:
+- Logik vorhanden
+- echtes Produktions-SDK fuer Ads noch nicht final verdrahtet
+- Debug nutzt simulierte Ads
+
+
+==================================================
+46. WICHTIGE SYSTEM-DATEIEN
+==================================================
+
+Wichtige Dateien im Projekt:
+
+StartScene.swift
+- Startmenue
+- Challenge Select
+- Daily Select
+- Shop
+
+GameScene.swift
+- aktives Gameplay
+- Eingabe
+- Gimmicks
+- Bots
+- Chaser
+- Result-Flows
+
+LevelConfig.swift
+- Story-Kapitel
+- Gimmick-Zuordnung
+- Konfigurationslogik
+
+NeonData.swift
+- Stores und Datenhaltung
+- Coins
+- Progress
+- Achievements
+- Daily Store
+- Challenge Store
+- Cosmetics
+- Ads
+
+LevelSelectScene.swift
+- Levelauswahl
+
+LevelCardNode.swift
+- Darstellung einzelner Levelkarten
+
+ResultOverlayNode.swift
+- Result-Overlays
+- Challenge-Overlay
+- Daily-Clear-Overlay
+
+MazeGenerator.swift
+- Maze-Aufbau
+
+MazeSolvability.swift
+- Solvability-Checks
+- Validierungen
+
+SoundFX.swift
+- Audio
+
+
+==================================================
+47. WAS DER SPIELER AKTUELL TUN KANN
+==================================================
+
+Ein Spieler kann aktuell:
+- Story-Level spielen
+- fruehere Level wiederholen
+- bessere Zeiten und Sterne holen
+- Time Challenge spielen
+- Daily Challenge spielen
+- Easy oder Hard Bot schlagen
+- Coins verdienen
+- Cosmetics kaufen
+- Cosmetics ausruesten
+- Theme-/Story-Rewards freischalten
+- Achievements freischalten
+- Rewarded Ads im Shop fuer Coins nutzen
+
+
+==================================================
+48. WICHTIGE STRUKTURELLE REALITAET DES PROJEKTS
+==================================================
+
+Der aktuelle Stand ist:
+- das Spiel ist deutlich ueber einen einfachen Prototyp hinaus
+- es hat mehrere Modi
+- mehrere Fortschrittssysteme
+- ein Cosmetic-System
+- mehrere Result-Flows
+- taegliche Inhalte
+- Challenge-Content
+- neue Spezialmechaniken
+
+Aber:
+- einige Bereiche sind inhaltlich schon weiter als ihre finale UI-Struktur
+- z.B. Story intern kapitelbasiert, waehrend der Level-Select aktuell wieder bewusst den alten, userbevorzugten Grid-Weg nutzt
+
+
+==================================================
+49. KURZFAZIT
+==================================================
+
+MazeDash ist aktuell ein strukturiertes Neon-Arcade-Maze-Spiel mit:
+- Story-Progression
+- 100 Story-Leveln in Kapitel-Form
+- mehreren Gimmick-Systemen
+- Time Challenge
+- Daily Challenge
+- Shop und Cosmetics
+- Achievements
+- Audio- und Animations-Polish
+- Ad-Architektur
+- neuen Hazard-/Enemy-Systemen
+
+Es ist aktuell kein reines Maze-Minispiel mehr, sondern ein voll ausgebautes Arcade-Spielsystem mit:
+- Progression
+- Replayability
+- Rewards
+- Modi
+- Skill-Bewertung
+- kosmetischer Langzeitmotivation
+
+Ende der Datei.

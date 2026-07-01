@@ -2,6 +2,12 @@ import Foundation
 import SpriteKit
 #if os(iOS) || os(tvOS)
 import UIKit
+#if canImport(GoogleMobileAds)
+import GoogleMobileAds
+#endif
+#if canImport(GoogleUserMessagingPlatform)
+import UserMessagingPlatform
+#endif
 #endif
 
 struct GridPoint: Hashable, Codable {
@@ -66,7 +72,10 @@ struct LevelBenchmarkData: Codable, Equatable {
     static func make(easyBotTime: TimeInterval, hardBotTime: TimeInterval) -> LevelBenchmarkData {
         let clampedEasy = max(MazeTiming.stepDuration, easyBotTime)
         let clampedHard = max(MazeTiming.stepDuration, hardBotTime)
-        let ordered = [clampedEasy, clampedHard * 1.8, clampedHard].sorted(by: >)
+        let oneStarCandidate = clampedEasy
+        let twoStarCandidate = clampedHard + 0.55 * max(0, clampedEasy - clampedHard)
+        let threeStarCandidate = clampedHard * 1.15
+        let ordered = [oneStarCandidate, twoStarCandidate, threeStarCandidate].sorted(by: >)
         return LevelBenchmarkData(
             easyBotTime: clampedEasy,
             hardBotTime: clampedHard,
@@ -176,7 +185,7 @@ final class ProgressStore {
 final class MazeBenchmarkStore {
     static let shared = MazeBenchmarkStore()
 
-    private let storagePrefix = "mazeDashBenchmark_v1_"
+    private let storagePrefix = "mazeDashBenchmark_v4_"
     private let queue = DispatchQueue(label: "maze.benchmark.store")
     private var memory: [String: LevelBenchmarkData] = [:]
 
@@ -277,15 +286,38 @@ final class MazeBenchmarkStore {
             }
             mix(257)
         }
+        for movingBlock in maze.movingBlocks {
+            mix(UInt64(movingBlock.start.row &* 31 &+ movingBlock.start.col))
+            mix(UInt64(movingBlock.end.row &* 31 &+ movingBlock.end.col))
+            mix(UInt64((movingBlock.speedMultiplier * 1000).rounded()))
+            mix(UInt64((movingBlock.phaseOffset * 1000).rounded()))
+        }
+        if let chaserSpawn = maze.chaserSpawn {
+            mix(UInt64(chaserSpawn.spawn.row &* 31 &+ chaserSpawn.spawn.col))
+            for scalar in chaserSpawn.behavior.rawValue.unicodeScalars {
+                mix(UInt64(scalar.value))
+            }
+            mix(UInt64((chaserSpawn.startDelay * 1000).rounded()))
+            mix(UInt64((chaserSpawn.repathDelay * 1000).rounded()))
+            mix(UInt64((chaserSpawn.speedMultiplier * 1000).rounded()))
+            mix(UInt64(chaserSpawn.trailDelaySteps))
+        }
         return String(hash, radix: 16)
     }
 }
 
 struct LevelStore {
-    static let levels: [LevelDefinition] = (1...30).map { index in
-        let config = makeLevelConfig(levelIndex: index)
-        return LevelDefinition(id: index, name: "Level \(index)", params: config.mazeParameters)
-    }
+    static let levels: [LevelDefinition] = {
+        let lastLevel = allStoryChapters().last?.levelRange.upperBound ?? 1
+        return (1...lastLevel).map { index in
+            let config = makeLevelConfig(levelIndex: index)
+            return LevelDefinition(
+                id: index,
+                name: "Level \(storyLocalLevelIndex(for: index))",
+                params: config.mazeParameters
+            )
+        }
+    }()
 }
 
 final class ThemeProgress {
@@ -470,6 +502,24 @@ final class MechanicTutorialStore {
     }
 }
 
+final class StartTutorialStore {
+    static let shared = StartTutorialStore()
+
+    private let storageKey = "neonMazeDidShowStartTutorial"
+
+    var hasShown: Bool {
+        UserDefaults.standard.bool(forKey: storageKey)
+    }
+
+    func markShown() {
+        UserDefaults.standard.set(true, forKey: storageKey)
+    }
+
+    func reset() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+}
+
 enum BotDifficulty: Int, CaseIterable, Codable {
     case off
     case easy
@@ -612,7 +662,18 @@ final class AchievementStore {
 
 func formattedTime(_ time: TimeInterval) -> String {
     let clamped = max(0, time)
-    return String(format: "%.2f", clamped)
+    if clamped < 60 {
+        return String(format: "%.2fs", clamped)
+    }
+
+    let totalSeconds = Int(clamped)
+    let minutes = totalSeconds / 60
+    let seconds = totalSeconds % 60
+    return "\(minutes)min \(String(format: "%02ds", seconds))"
+}
+
+func leaderboardScoreForStoryTime(_ time: TimeInterval) -> Int {
+    max(1, Int((max(0, time) * 100).rounded()))
 }
 
 enum GameRunMode: Equatable {
@@ -650,6 +711,10 @@ enum TimeChallengeDuration: Int, CaseIterable, Codable {
         case .threeMinutes:
             return "3 MIN"
         }
+    }
+
+    var hudTitle: String {
+        "\(rawValue) SEC"
     }
 
     var countdownTitle: String {
@@ -705,6 +770,165 @@ final class ChallengeStore {
 
     private func save() {
         UserDefaults.standard.set(records, forKey: storageKey)
+    }
+}
+
+private struct LeaderboardProfileState: Codable {
+    var playerName: String?
+    var submittedBest: [String: Int]
+    var pendingBest: [String: Int]
+    var pendingRenameFromName: String?
+    var pendingRenameScopes: Set<String>
+}
+
+struct PendingLeaderboardSubmission: Sendable {
+    let scope: LeaderboardScope
+    let score: Int
+    let previousName: String?
+}
+
+final class LeaderboardProfileStore {
+    static let shared = LeaderboardProfileStore()
+
+    static let maximumNameLength = 16
+
+    private let storageKey = "neonMazeLeaderboardProfile"
+    private var state = LeaderboardProfileState(
+        playerName: nil,
+        submittedBest: [:],
+        pendingBest: [:],
+        pendingRenameFromName: nil,
+        pendingRenameScopes: []
+    )
+
+    private init() {
+        guard let stored = UserDefaults.standard.data(forKey: storageKey),
+              let decoded = try? JSONDecoder().decode(LeaderboardProfileState.self, from: stored) else {
+            return
+        }
+        state = decoded
+    }
+
+    var playerName: String? {
+        state.playerName
+    }
+
+    func sanitize(name: String) -> String? {
+        let collapsed = name
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let normalized = collapsed
+            .replacingOccurrences(
+                of: #"[^A-Za-z0-9 _\.-]"#,
+                with: "",
+                options: .regularExpression
+            )
+        let sanitized = String(normalized.prefix(Self.maximumNameLength))
+        guard sanitized.count >= 2 else { return nil }
+        let blockedNameParts = [
+            "fuck", "shit", "bitch", "cunt", "nigger", "nigga", "fag", "faggot", "whore", "slut",
+            "rape", "rapist", "hitler", "nazi", "terror", "kkk", "porn", "sex", "anal", "penis",
+            "vagina", "dick", "cock", "pussy", "asshole", "motherfucker"
+        ]
+        let lower = sanitized.lowercased()
+        guard !blockedNameParts.contains(where: { lower.contains($0) }) else { return nil }
+        return sanitized
+    }
+
+    @discardableResult
+    func setPlayerName(_ name: String) -> String? {
+        guard let sanitized = sanitize(name: name) else { return nil }
+        let previousName = state.playerName
+        state.playerName = sanitized
+        if previousName == nil || previousName != sanitized {
+            for duration in TimeChallengeDuration.allCases {
+                let best = ChallengeStore.shared.best(for: duration)
+                guard best > 0 else { continue }
+                let scope = LeaderboardScope.timeChallenge(duration)
+                let key = scope.storageKey
+                let current = state.pendingBest[key]
+                if scope.isBetter(best, than: current) {
+                    state.pendingBest[key] = best
+                }
+            }
+            for level in LevelStore.levels {
+                guard let bestTime = ProgressStore.shared.progress(for: level.id).bestTime else { continue }
+                let score = leaderboardScoreForStoryTime(bestTime)
+                let scope = LeaderboardScope.storyLevel(level.id)
+                let key = scope.storageKey
+                let current = state.pendingBest[key]
+                if scope.isBetter(score, than: current) {
+                    state.pendingBest[key] = score
+                }
+            }
+            if let previousName, previousName != sanitized {
+                state.pendingRenameFromName = previousName
+                state.pendingRenameScopes = Set(state.submittedBest.keys)
+            }
+        }
+        save()
+        return sanitized
+    }
+
+    func registerNewLocalBest(scope: LeaderboardScope, score: Int) {
+        let key = scope.storageKey
+        let pending = state.pendingBest[key]
+        if scope.isBetter(score, than: pending) {
+            state.pendingBest[key] = score
+            save()
+        }
+    }
+
+    func pendingSubmission(for scope: LeaderboardScope) -> PendingLeaderboardSubmission? {
+        let key = scope.storageKey
+        let pending = state.pendingBest[key]
+        let submitted = state.submittedBest[key]
+        let needsImprovedScore = pending.map { scope.isBetter($0, than: submitted) } ?? false
+        let needsRenameMigration = state.pendingRenameFromName != nil && state.pendingRenameScopes.contains(key)
+
+        let scoreToSubmit: Int?
+        if needsImprovedScore, let pending {
+            scoreToSubmit = pending
+        } else if needsRenameMigration {
+            scoreToSubmit = pending ?? submitted
+        } else {
+            scoreToSubmit = nil
+        }
+
+        guard let scoreToSubmit else { return nil }
+        return PendingLeaderboardSubmission(
+            scope: scope,
+            score: scoreToSubmit,
+            previousName: needsRenameMigration ? state.pendingRenameFromName : nil
+        )
+    }
+
+    func pendingSubmissions() -> [PendingLeaderboardSubmission] {
+        var scopes = TimeChallengeDuration.allCases.map { LeaderboardScope.timeChallenge($0) }
+        scopes += LevelStore.levels.map { LeaderboardScope.storyLevel($0.id) }
+        return scopes.compactMap { pendingSubmission(for: $0) }
+    }
+
+    func markSubmitted(scope: LeaderboardScope, score: Int) {
+        let key = scope.storageKey
+        let previous = state.submittedBest[key]
+        if scope.isBetter(score, than: previous) {
+            state.submittedBest[key] = score
+        }
+        if let pending = state.pendingBest[key], !scope.isBetter(pending, than: score) {
+            state.pendingBest.removeValue(forKey: key)
+        }
+        state.pendingRenameScopes.remove(key)
+        if state.pendingRenameScopes.isEmpty {
+            state.pendingRenameFromName = nil
+        }
+        save()
+    }
+
+    private func save() {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
     }
 }
 
@@ -914,6 +1138,608 @@ final class CoinStore {
     }
 }
 
+enum AdInterstitialContext: String, Codable {
+    case story
+    case timeChallenge
+}
+
+enum AdPresentationResult {
+    case shown
+    case unavailable
+    case failed
+}
+
+enum RewardedAdPresentationResult {
+    case rewarded
+    case unavailable
+    case failed
+    case dismissed
+}
+
+enum RewardedShopAdOutcome {
+    case rewarded(coins: Int)
+    case unavailable
+    case failed
+    case dismissed
+    case limitReached
+}
+
+private struct AdProgressState: Codable {
+    var storyCompletedRuns: Int
+    var storyInterstitialPending: Bool
+    var challengeCompletedRuns: Int
+    var challengeInterstitialPending: Bool
+    var rewardedDayKey: String
+    var rewardedClaimsUsed: Int
+
+    static let empty = AdProgressState(
+        storyCompletedRuns: 0,
+        storyInterstitialPending: false,
+        challengeCompletedRuns: 0,
+        challengeInterstitialPending: false,
+        rewardedDayKey: "",
+        rewardedClaimsUsed: 0
+    )
+}
+
+#if os(iOS) || os(tvOS)
+private protocol AdPresenting: AnyObject {
+    func configure()
+    func preloadInterstitial()
+    func preloadRewarded()
+    func presentInterstitial(from presenter: UIViewController, context: AdInterstitialContext, completion: @escaping (AdPresentationResult) -> Void)
+    func presentRewarded(from presenter: UIViewController, completion: @escaping (RewardedAdPresentationResult) -> Void)
+}
+
+private final class UnavailableAdPresenter: AdPresenting {
+    func configure() {}
+    func preloadInterstitial() {}
+    func preloadRewarded() {}
+
+    func presentInterstitial(from presenter: UIViewController, context: AdInterstitialContext, completion: @escaping (AdPresentationResult) -> Void) {
+        completion(.unavailable)
+    }
+
+    func presentRewarded(from presenter: UIViewController, completion: @escaping (RewardedAdPresentationResult) -> Void) {
+        completion(.unavailable)
+    }
+}
+
+#if canImport(GoogleMobileAds)
+private enum AdMobConfig {
+    private static let sampleAppID = "ca-app-pub-3940256099942544~1458002511"
+    private static let sampleInterstitialUnitID = "ca-app-pub-3940256099942544/4411468910"
+    private static let sampleRewardedUnitID = "ca-app-pub-3940256099942544/1712485313"
+
+    static var appID: String? {
+        bundleValue(for: "GADApplicationIdentifier") ?? debugFallback(sampleAppID)
+    }
+
+    static var hasValidIdentifiers: Bool {
+        guard let appID,
+              let storyInterstitialUnitID = interstitialUnitID(for: .story),
+              let timeChallengeInterstitialUnitID = interstitialUnitID(for: .timeChallenge),
+              let rewardedUnitID
+        else {
+            return false
+        }
+
+        let values = [appID, storyInterstitialUnitID, timeChallengeInterstitialUnitID, rewardedUnitID]
+        let sampleValues = [sampleAppID, sampleInterstitialUnitID, sampleRewardedUnitID]
+        return values.allSatisfy { !sampleValues.contains($0) }
+    }
+
+    static func interstitialUnitID(for context: AdInterstitialContext) -> String? {
+        switch context {
+        case .story:
+            return bundleValue(for: "MazeDashStoryInterstitialAdUnitID") ?? debugFallback(sampleInterstitialUnitID)
+        case .timeChallenge:
+            return bundleValue(for: "MazeDashTimeChallengeInterstitialAdUnitID") ?? debugFallback(sampleInterstitialUnitID)
+        }
+    }
+
+    static var rewardedUnitID: String? {
+        bundleValue(for: "MazeDashRewardedAdUnitID") ?? debugFallback(sampleRewardedUnitID)
+    }
+
+    private static func bundleValue(for key: String) -> String? {
+        (Bundle.main.object(forInfoDictionaryKey: key) as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty
+    }
+
+    private static func debugFallback(_ sampleValue: String) -> String? {
+        #if DEBUG
+        sampleValue
+        #else
+        nil
+        #endif
+    }
+}
+
+private final class GoogleMobileAdsPresenter: NSObject, AdPresenting {
+    private enum ActivePlacement {
+        case interstitial(AdInterstitialContext)
+        case rewarded
+    }
+
+    private var isConfigured = false
+    private var interstitialAds: [AdInterstitialContext: InterstitialAd] = [:]
+    private var interstitialLoadsInFlight: Set<AdInterstitialContext> = []
+    private var rewardedAd: RewardedAd?
+    private var rewardedLoadInFlight = false
+
+    private var activePlacement: ActivePlacement?
+    private var interstitialCompletion: ((AdPresentationResult) -> Void)?
+    private var rewardedCompletion: ((RewardedAdPresentationResult) -> Void)?
+    private var rewardedEarned = false
+    private var hasStartedSDK = false
+
+    func configure() {
+        guard !isConfigured else { return }
+        isConfigured = true
+        startSDKIfNeeded()
+    }
+
+    func preloadInterstitial() {
+        preloadInterstitial(for: .story)
+        preloadInterstitial(for: .timeChallenge)
+    }
+
+    func preloadRewarded() {
+        guard rewardedAd == nil, !rewardedLoadInFlight else { return }
+        guard let rewardedUnitID = AdMobConfig.rewardedUnitID else { return }
+        rewardedLoadInFlight = true
+        RewardedAd.load(with: rewardedUnitID, request: Request()) { [weak self] ad, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.rewardedLoadInFlight = false
+                guard let ad else { return }
+                ad.fullScreenContentDelegate = self
+                self.rewardedAd = ad
+            }
+        }
+    }
+
+    func presentInterstitial(from presenter: UIViewController, context: AdInterstitialContext, completion: @escaping (AdPresentationResult) -> Void) {
+        guard activePlacement == nil else {
+            completion(.failed)
+            return
+        }
+        guard presenter.presentedViewController == nil else {
+            completion(.failed)
+            return
+        }
+        guard let ad = interstitialAds.removeValue(forKey: context) else {
+            preloadInterstitial(for: context)
+            completion(.unavailable)
+            return
+        }
+
+        activePlacement = .interstitial(context)
+        interstitialCompletion = completion
+        ad.fullScreenContentDelegate = self
+        ad.present(from: presenter)
+        preloadInterstitial(for: context)
+    }
+
+    func presentRewarded(from presenter: UIViewController, completion: @escaping (RewardedAdPresentationResult) -> Void) {
+        guard activePlacement == nil else {
+            completion(.failed)
+            return
+        }
+        guard presenter.presentedViewController == nil else {
+            completion(.failed)
+            return
+        }
+        guard let ad = rewardedAd else {
+            preloadRewarded()
+            completion(.unavailable)
+            return
+        }
+
+        rewardedAd = nil
+        rewardedEarned = false
+        activePlacement = .rewarded
+        rewardedCompletion = completion
+        ad.fullScreenContentDelegate = self
+        ad.present(from: presenter) { [weak self] in
+            self?.rewardedEarned = true
+        }
+        preloadRewarded()
+    }
+
+    private func preloadInterstitial(for context: AdInterstitialContext) {
+        guard interstitialAds[context] == nil, !interstitialLoadsInFlight.contains(context) else { return }
+        guard let unitID = AdMobConfig.interstitialUnitID(for: context) else { return }
+        interstitialLoadsInFlight.insert(context)
+        InterstitialAd.load(with: unitID, request: Request()) { [weak self] ad, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.interstitialLoadsInFlight.remove(context)
+                guard let ad else { return }
+                ad.fullScreenContentDelegate = self
+                self.interstitialAds[context] = ad
+            }
+        }
+    }
+
+    private func startSDKIfNeeded() {
+        guard !hasStartedSDK else { return }
+        hasStartedSDK = true
+        MobileAds.shared.start(completionHandler: nil)
+    }
+}
+
+extension GoogleMobileAdsPresenter: FullScreenContentDelegate {
+    func adDidDismissFullScreenContent(_ ad: any FullScreenPresentingAd) {
+        switch activePlacement {
+        case let .interstitial(context):
+            activePlacement = nil
+            let completion = interstitialCompletion
+            interstitialCompletion = nil
+            preloadInterstitial(for: context)
+            completion?(.shown)
+        case .rewarded:
+            activePlacement = nil
+            let completion = rewardedCompletion
+            rewardedCompletion = nil
+            let outcome: RewardedAdPresentationResult = rewardedEarned ? .rewarded : .dismissed
+            rewardedEarned = false
+            preloadRewarded()
+            completion?(outcome)
+        case nil:
+            break
+        }
+    }
+
+    func ad(_ ad: any FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: any Error) {
+        switch activePlacement {
+        case let .interstitial(context):
+            activePlacement = nil
+            let completion = interstitialCompletion
+            interstitialCompletion = nil
+            preloadInterstitial(for: context)
+            completion?(.failed)
+        case .rewarded:
+            activePlacement = nil
+            let completion = rewardedCompletion
+            rewardedCompletion = nil
+            rewardedEarned = false
+            preloadRewarded()
+            completion?(.failed)
+        case nil:
+            break
+        }
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+
+#elseif DEBUG
+private final class DebugAdPresenter: AdPresenting {
+    func configure() {}
+    func preloadInterstitial() {}
+    func preloadRewarded() {}
+
+    func presentInterstitial(from presenter: UIViewController, context: AdInterstitialContext, completion: @escaping (AdPresentationResult) -> Void) {
+        guard presenter.presentedViewController == nil else {
+            completion(.failed)
+            return
+        }
+
+        let title = context == .story ? "SIMULATED STORY AD" : "SIMULATED TIME AD"
+        let message = context == .story
+            ? "Debug interstitial at a natural Story transition."
+            : "Debug interstitial after a completed Time Challenge run."
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Close Ad", style: .default) { _ in
+            completion(.shown)
+        })
+        presenter.present(alert, animated: true)
+    }
+
+    func presentRewarded(from presenter: UIViewController, completion: @escaping (RewardedAdPresentationResult) -> Void) {
+        guard presenter.presentedViewController == nil else {
+            completion(.failed)
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "SIMULATED REWARDED AD",
+            message: "Grant the 30-coin reward only when this full ad flow completes.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Complete Ad", style: .default) { _ in
+            completion(.rewarded)
+        })
+        alert.addAction(UIAlertAction(title: "Close Early", style: .cancel) { _ in
+            completion(.dismissed)
+        })
+        presenter.present(alert, animated: true)
+    }
+}
+#endif
+
+final class AdService {
+    static let shared = AdService()
+
+    static let adStateDidChangeNotification = Notification.Name("MazeDashAdStateDidChange")
+
+    private let storageKey = "mazeDashAdProgressState"
+    private let completionsPerInterstitial = 5
+    private let rewardedCoinAmount = 30
+    private let rewardedDailyLimit = 2
+
+    private let defaults = UserDefaults.standard
+    private var state: AdProgressState
+    private var didConfigure = false
+    private var consentFlowCompleted = false
+    private var consentFlowInProgress = false
+
+    private lazy var calendar: Calendar = {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = .autoupdatingCurrent
+        return calendar
+    }()
+
+    private let presenter: AdPresenting = {
+        #if canImport(GoogleMobileAds)
+        #if DEBUG
+        GoogleMobileAdsPresenter() as AdPresenting
+        #else
+        if AdMobConfig.hasValidIdentifiers {
+            return GoogleMobileAdsPresenter() as AdPresenting
+        }
+        return UnavailableAdPresenter() as AdPresenting
+        #endif
+        #elseif DEBUG
+        DebugAdPresenter() as AdPresenting
+        #else
+        UnavailableAdPresenter() as AdPresenting
+        #endif
+    }()
+
+    private init() {
+        if let stored = defaults.data(forKey: storageKey),
+           let decoded = try? JSONDecoder().decode(AdProgressState.self, from: stored) {
+            state = decoded
+        } else {
+            state = .empty
+        }
+        refreshRewardedDayIfNeeded()
+    }
+
+    func configureIfNeeded() {
+        guard !didConfigure else { return }
+        guard canConfigureAds else { return }
+        didConfigure = true
+        presenter.configure()
+        presenter.preloadInterstitial()
+        presenter.preloadRewarded()
+    }
+
+    func requestConsentAndConfigureIfNeeded() {
+        #if os(iOS)
+        #if canImport(GoogleUserMessagingPlatform)
+        guard !consentFlowInProgress else { return }
+        if consentFlowCompleted {
+            configureIfNeeded()
+            return
+        }
+
+        consentFlowInProgress = true
+        let parameters = RequestParameters()
+        ConsentInformation.shared.requestConsentInfoUpdate(with: parameters) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                ConsentForm.loadAndPresentIfRequired(from: self.topViewController()) { [weak self] _ in
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        self.consentFlowInProgress = false
+                        self.consentFlowCompleted = true
+                        self.configureIfNeeded()
+                    }
+                }
+            }
+        }
+        #else
+        configureIfNeeded()
+        #endif
+        #else
+        configureIfNeeded()
+        #endif
+    }
+
+    private var canConfigureAds: Bool {
+        #if canImport(GoogleUserMessagingPlatform)
+        return consentFlowCompleted && ConsentInformation.shared.canRequestAds
+        #else
+        return true
+        #endif
+    }
+
+    func registerCompletedStoryRun() {
+        configureIfNeeded()
+        refreshRewardedDayIfNeeded()
+        state.storyCompletedRuns += 1
+        if state.storyCompletedRuns >= completionsPerInterstitial {
+            state.storyInterstitialPending = true
+        }
+        save()
+        presenter.preloadInterstitial()
+    }
+
+    func registerCompletedTimeChallengeRun() {
+        configureIfNeeded()
+        refreshRewardedDayIfNeeded()
+        state.challengeCompletedRuns += 1
+        if state.challengeCompletedRuns >= completionsPerInterstitial {
+            state.challengeInterstitialPending = true
+        }
+        save()
+        presenter.preloadInterstitial()
+    }
+
+    func presentInterstitialIfDue(
+        for context: AdInterstitialContext,
+        from presenterViewController: UIViewController?,
+        completion: @escaping () -> Void
+    ) {
+        configureIfNeeded()
+        refreshRewardedDayIfNeeded()
+        guard isInterstitialDue(for: context) else {
+            completion()
+            return
+        }
+        guard let presenterViewController = presenterViewController ?? topViewController() else {
+            completion()
+            return
+        }
+
+        presenter.presentInterstitial(from: presenterViewController, context: context) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else {
+                    completion()
+                    return
+                }
+                if result == .shown {
+                    self.consumeInterstitial(for: context)
+                } else {
+                    self.presenter.preloadInterstitial()
+                }
+                completion()
+            }
+        }
+    }
+
+    func requestRewardedShopCoins(
+        from presenterViewController: UIViewController?,
+        completion: @escaping (RewardedShopAdOutcome) -> Void
+    ) {
+        configureIfNeeded()
+        refreshRewardedDayIfNeeded()
+        guard remainingRewardedClaimsToday > 0 else {
+            completion(.limitReached)
+            return
+        }
+        guard let presenterViewController = presenterViewController ?? topViewController() else {
+            completion(.unavailable)
+            return
+        }
+
+        presenter.presentRewarded(from: presenterViewController) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else {
+                    completion(.failed)
+                    return
+                }
+
+                switch result {
+                case .rewarded:
+                    self.refreshRewardedDayIfNeeded()
+                    guard self.remainingRewardedClaimsToday > 0 else {
+                        completion(.limitReached)
+                        return
+                    }
+                    self.state.rewardedClaimsUsed += 1
+                    self.save()
+                    CoinStore.shared.add(self.rewardedCoinAmount)
+                    self.presenter.preloadRewarded()
+                    completion(.rewarded(coins: self.rewardedCoinAmount))
+                case .unavailable:
+                    self.presenter.preloadRewarded()
+                    completion(.unavailable)
+                case .failed:
+                    self.presenter.preloadRewarded()
+                    completion(.failed)
+                case .dismissed:
+                    self.presenter.preloadRewarded()
+                    completion(.dismissed)
+                }
+            }
+        }
+    }
+
+    var remainingRewardedClaimsToday: Int {
+        refreshRewardedDayIfNeeded()
+        return max(0, rewardedDailyLimit - state.rewardedClaimsUsed)
+    }
+
+    var rewardedAvailabilityText: String {
+        "\(remainingRewardedClaimsToday)/\(rewardedDailyLimit) AVAILABLE"
+    }
+
+    func isInterstitialDue(for context: AdInterstitialContext) -> Bool {
+        switch context {
+        case .story:
+            return state.storyInterstitialPending
+        case .timeChallenge:
+            return state.challengeInterstitialPending
+        }
+    }
+
+    private func consumeInterstitial(for context: AdInterstitialContext) {
+        switch context {
+        case .story:
+            state.storyCompletedRuns = 0
+            state.storyInterstitialPending = false
+        case .timeChallenge:
+            state.challengeCompletedRuns = 0
+            state.challengeInterstitialPending = false
+        }
+        save()
+        presenter.preloadInterstitial()
+    }
+
+    private func refreshRewardedDayIfNeeded() {
+        let dayKey = currentDayKey()
+        guard state.rewardedDayKey != dayKey else { return }
+        state.rewardedDayKey = dayKey
+        state.rewardedClaimsUsed = 0
+        save()
+    }
+
+    private func currentDayKey() -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: Date())
+        return String(format: "%04d-%02d-%02d", components.year ?? 1970, components.month ?? 1, components.day ?? 1)
+    }
+
+    private func save() {
+        if let encoded = try? JSONEncoder().encode(state) {
+            defaults.set(encoded, forKey: storageKey)
+        }
+        NotificationCenter.default.post(name: Self.adStateDidChangeNotification, object: nil)
+    }
+
+    private func topViewController() -> UIViewController? {
+        let root = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }?
+            .rootViewController
+        return topMostViewController(from: root)
+    }
+
+    private func topMostViewController(from root: UIViewController?) -> UIViewController? {
+        if let navigation = root as? UINavigationController {
+            return topMostViewController(from: navigation.visibleViewController)
+        }
+        if let tab = root as? UITabBarController {
+            return topMostViewController(from: tab.selectedViewController)
+        }
+        if let presented = root?.presentedViewController {
+            return topMostViewController(from: presented)
+        }
+        return root
+    }
+}
+#endif
+
 enum CosmeticCategory: String, CaseIterable, Codable {
     case player
     case trail
@@ -962,17 +1788,36 @@ enum PlayerSkin: String, CaseIterable, Codable {
     case electricPurple
     case toxicGreen
     case goldenPulse
+    case voidCore
     case gridCore
     case pulseCore
     case glitchSkin
     case energyStripes
     case dualCore
+    case quantumFracture
+
+    static var shopCases: [PlayerSkin] {
+        [
+            .neonCyan,
+            .neonPink,
+            .toxicGreen,
+            .electricPurple,
+            .goldenPulse,
+            .voidCore,
+            .gridCore,
+            .energyStripes,
+            .pulseCore,
+            .glitchSkin,
+            .quantumFracture,
+            .dualCore
+        ]
+    }
 
     var kind: PlayerSkinKind {
         switch self {
-        case .neonCyan, .neonPink, .electricPurple, .toxicGreen, .goldenPulse:
+        case .neonCyan, .neonPink, .electricPurple, .toxicGreen, .goldenPulse, .voidCore:
             return .color
-        case .gridCore, .pulseCore, .glitchSkin, .energyStripes, .dualCore:
+        case .gridCore, .pulseCore, .glitchSkin, .energyStripes, .dualCore, .quantumFracture:
             return .pattern
         }
     }
@@ -980,85 +1825,92 @@ enum PlayerSkin: String, CaseIterable, Codable {
     var displayName: String {
         switch self {
         case .neonCyan:
-            return "NEON CYAN"
+            return "Neon Cyan"
         case .neonPink:
-            return "NEON PINK"
+            return "Hot Pink"
         case .electricPurple:
-            return "ELECTRIC PURPLE"
+            return "Electric Purple"
         case .toxicGreen:
-            return "TOXIC GREEN"
+            return "Toxic Lime"
         case .goldenPulse:
-            return "GOLDEN PULSE"
+            return "Gilded Pulse"
+        case .voidCore:
+            return "Void Core"
         case .gridCore:
-            return "GRID CORE"
+            return "Grid Core"
         case .pulseCore:
-            return "PULSE CORE"
+            return "Pulse Core"
         case .glitchSkin:
-            return "GLITCH SKIN"
+            return "Data Blocks"
         case .energyStripes:
-            return "ENERGY STRIPES"
+            return "Energy Stripes"
         case .dualCore:
-            return "DUAL CORE"
+            return "Neural Grid"
+        case .quantumFracture:
+            return "Quantum Fracture"
         }
     }
 
     var detail: String {
         switch self {
         case .neonCyan:
-            return "CLASSIC FUTURISTIC CYAN"
+            return "Clean Core Glow"
         case .neonPink:
-            return "EXPRESSIVE NEON DRIVE"
+            return "Sharp Neon Bloom"
         case .electricPurple:
-            return "SOFT PREMIUM GLOW"
+            return "Deep Violet Charge"
         case .toxicGreen:
-            return "ARCADE REACTIVE HUE"
+            return "Electric Acid Pulse"
         case .goldenPulse:
-            return "LUXURY SHIMMER FINISH"
+            return "Gold Voltage Flow"
+        case .voidCore:
+            return "Dark Energy Sink"
         case .gridCore:
-            return "TECHNICAL INNER GRID"
+            return "Clean Data Grid"
         case .pulseCore:
-            return "BREATHING ENERGY CORE"
+            return "Inner Pulse Light"
         case .glitchSkin:
-            return "CONTROLLED DIGITAL GLITCH"
+            return "Broken Pixel Drift"
         case .energyStripes:
-            return "FLOWING DIAGONAL LINES"
+            return "Charged Line Flow"
         case .dualCore:
-            return "TWO NEON WORLDS SHIFTING"
+            return "Living Signal Web"
+        case .quantumFracture:
+            return "Split Reality Grid"
         }
     }
 
     var price: Int? {
         switch self {
         case .neonCyan:
-            return 0
+            return 50
         case .neonPink:
-            return 24
+            return 70
         case .electricPurple:
-            return 34
+            return 120
         case .toxicGreen:
-            return 42
-        case .pulseCore:
-            return 78
-        case .glitchSkin:
-            return 112
+            return 90
+        case .goldenPulse:
+            return 500
+        case .voidCore:
+            return 700
+        case .gridCore:
+            return 80
         case .energyStripes:
-            return 92
-        case .goldenPulse, .gridCore, .dualCore:
-            return nil
+            return 120
+        case .pulseCore:
+            return 140
+        case .glitchSkin:
+            return 160
+        case .quantumFracture:
+            return 600
+        case .dualCore:
+            return 800
         }
     }
 
     var rewardLevel: Int? {
-        switch self {
-        case .goldenPulse:
-            return 5
-        case .gridCore:
-            return 10
-        case .dualCore:
-            return 30
-        default:
-            return nil
-        }
+        nil
     }
 
     var tintColor: SKColor { baseColor }
@@ -1075,6 +1927,8 @@ enum PlayerSkin: String, CaseIterable, Codable {
             return SKColor(hex: 0x39FF14)
         case .goldenPulse:
             return SKColor(hex: 0xFFD84D)
+        case .voidCore:
+            return SKColor(hex: 0x1A1824)
         case .gridCore:
             return SKColor(hex: 0x00D4FF)
         case .pulseCore:
@@ -1084,7 +1938,9 @@ enum PlayerSkin: String, CaseIterable, Codable {
         case .energyStripes:
             return SKColor(hex: 0x39FF14)
         case .dualCore:
-            return SKColor(hex: 0x00D4FF)
+            return SKColor(hex: 0x3FE7FF)
+        case .quantumFracture:
+            return SKColor(hex: 0x7A5CFF)
         }
     }
 
@@ -1100,6 +1956,8 @@ enum PlayerSkin: String, CaseIterable, Codable {
             return SKColor(hex: 0x8CFF7A)
         case .goldenPulse:
             return SKColor(hex: 0xFFF2A6)
+        case .voidCore:
+            return SKColor(hex: 0x74F7FF)
         case .gridCore:
             return SKColor(hex: 0x66F2FF)
         case .pulseCore:
@@ -1109,7 +1967,9 @@ enum PlayerSkin: String, CaseIterable, Codable {
         case .energyStripes:
             return SKColor(hex: 0x9FFF7D)
         case .dualCore:
-            return SKColor(hex: 0xFF6BC1)
+            return SKColor(hex: 0xC8FBFF)
+        case .quantumFracture:
+            return SKColor(hex: 0xE6D7FF)
         }
     }
 
@@ -1125,6 +1985,8 @@ enum PlayerSkin: String, CaseIterable, Codable {
             return SKColor(hex: 0x1FAF00)
         case .goldenPulse:
             return SKColor(hex: 0xFFB800)
+        case .voidCore:
+            return SKColor(hex: 0x05070D)
         case .gridCore:
             return SKColor(hex: 0x00708E)
         case .pulseCore:
@@ -1134,7 +1996,9 @@ enum PlayerSkin: String, CaseIterable, Codable {
         case .energyStripes:
             return SKColor(hex: 0x168300)
         case .dualCore:
-            return SKColor(hex: 0x7E22CE)
+            return SKColor(hex: 0x0F5D77)
+        case .quantumFracture:
+            return SKColor(hex: 0x24144C)
         }
     }
 
@@ -1142,8 +2006,14 @@ enum PlayerSkin: String, CaseIterable, Codable {
         switch self {
         case .goldenPulse:
             return ArcadeStyle.Color.accentYellow
+        case .voidCore:
+            return SKColor(hex: 0x7BF3FF)
         case .neonPink, .pulseCore:
             return ArcadeStyle.Color.accentMagenta
+        case .dualCore:
+            return SKColor(hex: 0x7BF3FF)
+        case .quantumFracture:
+            return SKColor(hex: 0xB691FF)
         default:
             return baseColor
         }
@@ -1152,90 +2022,110 @@ enum PlayerSkin: String, CaseIterable, Codable {
 
 enum TrailStyle: String, CaseIterable, Codable {
     case classicNeon
-    case electricSparks
     case smoothLight
+    case electricSparks
     case pixelTrail
     case pulseTrail
     case energyBurst
     case orbitTrail
+    case phaseStream
+
+    static var shopCases: [TrailStyle] {
+        [
+            .classicNeon,
+            .smoothLight,
+            .pixelTrail,
+            .electricSparks,
+            .orbitTrail,
+            .phaseStream
+        ]
+    }
 
     var displayName: String {
         switch self {
         case .classicNeon:
-            return "CLASSIC NEON"
-        case .electricSparks:
-            return "ELECTRIC SPARKS"
+            return "Classic Neon"
         case .smoothLight:
-            return "SMOOTH LIGHT"
+            return "Smooth Light"
+        case .electricSparks:
+            return "Electric Sparks"
         case .pixelTrail:
-            return "PIXEL TRAIL"
+            return "Pixel Trail"
         case .pulseTrail:
-            return "PULSE TRAIL"
+            return "Smooth Light"
         case .energyBurst:
-            return "ENERGY BURST"
+            return "Phase Stream"
         case .orbitTrail:
-            return "ORBIT TRAIL"
+            return "Orbit Trail"
+        case .phaseStream:
+            return "Phase Stream"
         }
     }
 
     var detail: String {
         switch self {
         case .classicNeon:
-            return "CLEAN BASELINE TRAIL"
-        case .electricSparks:
-            return "SMALL ELECTRIC FUNKS"
+            return "Clean Light Trace"
         case .smoothLight:
-            return "SOFT LIGHT RESIDUE"
+            return "Soft Motion Glow"
+        case .electricSparks:
+            return "Static Arc Scatter"
         case .pixelTrail:
-            return "GEOMETRIC PIXEL BURSTS"
+            return "Pixel Dust Wake"
         case .pulseTrail:
-            return "PARTICLES THAT BREATHE"
+            return "Soft Motion Glow"
         case .energyBurst:
-            return "CALM UNTIL COMBO BURSTS"
+            return "Shifted Motion Stream"
         case .orbitTrail:
-            return "MICRO PARTICLES IN ORBIT"
+            return "Rotating Light Wake"
+        case .phaseStream:
+            return "Shifted Motion Stream"
         }
     }
 
     var price: Int? {
         switch self {
         case .classicNeon:
-            return 0
-        case .electricSparks:
-            return 64
+            return 60
         case .smoothLight:
-            return 76
+            return 90
+        case .electricSparks:
+            return 160
         case .pixelTrail:
-            return 70
+            return 130
         case .pulseTrail:
-            return 94
-        case .orbitTrail:
-            return 128
+            return nil
         case .energyBurst:
             return nil
+        case .orbitTrail:
+            return 500
+        case .phaseStream:
+            return 750
         }
     }
 
     var rewardLevel: Int? {
-        self == .energyBurst ? 15 : nil
+        nil
     }
 
     var accentColor: SKColor {
         switch self {
         case .classicNeon:
             return ArcadeStyle.Color.accentCyan
-        case .electricSparks:
-            return ArcadeStyle.Color.accentYellow
         case .smoothLight:
             return SKColor(hex: 0xA6F7FF)
+        case .electricSparks:
+            return ArcadeStyle.Color.accentYellow
         case .pixelTrail:
             return ArcadeStyle.Color.accentMagenta
         case .pulseTrail:
-            return SKColor(hex: 0xFF91D4)
+            return SKColor(hex: 0xA6F7FF)
         case .energyBurst:
-            return SKColor(hex: 0xFFD84D)
+            return SKColor(hex: 0xB691FF)
         case .orbitTrail:
             return SKColor(hex: 0xB691FF)
+        case .phaseStream:
+            return SKColor(hex: 0x9A8CFF)
         }
     }
 }
@@ -1246,54 +2136,72 @@ enum WinAnimationStyle: String, CaseIterable, Codable {
     case pixelShatter
     case shockwaveRing
     case lightBeamFinish
+    case timeFreezeShatter
+
+    static var shopCases: [WinAnimationStyle] {
+        [
+            .neonExplosion,
+            .shockwaveRing,
+            .pixelShatter,
+            .lightBeamFinish,
+            .energyImplosion,
+            .timeFreezeShatter
+        ]
+    }
 
     var displayName: String {
         switch self {
         case .neonExplosion:
-            return "NEON EXPLOSION"
+            return "Neon Burst"
         case .energyImplosion:
-            return "ENERGY IMPLOSION"
+            return "Supernova Collapse"
         case .pixelShatter:
-            return "PIXEL SHATTER"
+            return "Pixel Break"
         case .shockwaveRing:
-            return "SHOCKWAVE RING"
+            return "Shockwave Ring"
         case .lightBeamFinish:
-            return "LIGHT BEAM FINISH"
+            return "Light Beam Finish"
+        case .timeFreezeShatter:
+            return "Time Freeze Shatter"
         }
     }
 
     var detail: String {
         switch self {
         case .neonExplosion:
-            return "RADIAL ENERGY BURST"
+            return "Fast Finish Burst"
         case .energyImplosion:
-            return "CONTROLLED COMPRESSION RELEASE"
+            return "Collapse Into Light"
         case .pixelShatter:
-            return "PLAYER BREAKS INTO PIXELS"
+            return "Digital Break Flash"
         case .shockwaveRing:
-            return "RING BLAST FROM GOAL"
+            return "Ring Impact Pulse"
         case .lightBeamFinish:
-            return "ABSORBED INTO LIGHT"
+            return "Vertical Exit Beam"
+        case .timeFreezeShatter:
+            return "Frozen World Break"
         }
     }
 
     var price: Int? {
         switch self {
         case .neonExplosion:
-            return 0
+            return 100
         case .energyImplosion:
-            return 84
+            return 600
         case .pixelShatter:
-            return 108
+            return 180
         case .shockwaveRing:
-            return 92
+            return 140
         case .lightBeamFinish:
-            return nil
+            return 220
+        case .timeFreezeShatter:
+            return 900
         }
     }
 
     var rewardLevel: Int? {
-        self == .lightBeamFinish ? 20 : nil
+        nil
     }
 
     var accentColor: SKColor {
@@ -1308,6 +2216,8 @@ enum WinAnimationStyle: String, CaseIterable, Codable {
             return SKColor(hex: 0x66F2FF)
         case .lightBeamFinish:
             return SKColor(hex: 0xFFF2A6)
+        case .timeFreezeShatter:
+            return SKColor(hex: 0xB8F4FF)
         }
     }
 }
@@ -1389,7 +2299,6 @@ enum ShopTab: String, CaseIterable, Codable {
     case playerPatterns
     case trails
     case winAnimations
-    case teleporters
 
     var title: String {
         switch self {
@@ -1401,8 +2310,6 @@ enum ShopTab: String, CaseIterable, Codable {
             return "TRAILS"
         case .winAnimations:
             return "WIN FX"
-        case .teleporters:
-            return "PORTALS"
         }
     }
 }
@@ -1487,7 +2394,7 @@ enum ShopItem: Hashable {
         case .win:
             return .winAnimations
         case .teleporter:
-            return .teleporters
+            return .winAnimations
         }
     }
 }
@@ -1500,47 +2407,75 @@ struct StoryCosmeticReward {
 
     static func reward(for level: Int) -> StoryCosmeticReward? {
         switch level {
-        case 5:
-            return StoryCosmeticReward(
-                milestoneLevel: 5,
-                item: .player(.goldenPulse),
-                title: "NEW SKIN UNLOCKED",
-                detail: "GOLDEN PULSE REWARDED FOR CLEARING 5 LEVELS."
-            )
         case 10:
             return StoryCosmeticReward(
                 milestoneLevel: 10,
-                item: .player(.gridCore),
-                title: "PATTERN UNLOCKED",
-                detail: "GRID CORE REWARDED FOR CLEARING 10 LEVELS."
-            )
-        case 15:
-            return StoryCosmeticReward(
-                milestoneLevel: 15,
-                item: .trail(.energyBurst),
-                title: "TRAIL UNLOCKED",
-                detail: "ENERGY BURST REWARDED FOR CLEARING 15 LEVELS."
+                item: .player(.neonPink),
+                title: "COLOR UNLOCKED",
+                detail: "HOT PINK DROPS INTO YOUR LOADOUT."
             )
         case 20:
             return StoryCosmeticReward(
                 milestoneLevel: 20,
-                item: .win(.lightBeamFinish),
-                title: "WIN FX UNLOCKED",
-                detail: "LIGHT BEAM FINISH REWARDED FOR CLEARING 20 LEVELS."
-            )
-        case 25:
-            return StoryCosmeticReward(
-                milestoneLevel: 25,
-                item: .teleporter(.quantumPortal),
-                title: "PORTAL SKIN UNLOCKED",
-                detail: "QUANTUM PORTAL REWARDED FOR CLEARING 25 LEVELS."
+                item: .player(.gridCore),
+                title: "PATTERN UNLOCKED",
+                detail: "GRID CORE IS NOW YOURS."
             )
         case 30:
             return StoryCosmeticReward(
                 milestoneLevel: 30,
-                item: .player(.dualCore),
-                title: "FINAL SKIN UNLOCKED",
-                detail: "DUAL CORE REWARDED FOR FINISHING STORY MODE."
+                item: .trail(.smoothLight),
+                title: "TRAIL UNLOCKED",
+                detail: "SMOOTH LIGHT JOINS YOUR RUN."
+            )
+        case 40:
+            return StoryCosmeticReward(
+                milestoneLevel: 40,
+                item: .win(.shockwaveRing),
+                title: "WIN FX UNLOCKED",
+                detail: "SHOCKWAVE RING IS READY FOR FINISHES."
+            )
+        case 50:
+            return StoryCosmeticReward(
+                milestoneLevel: 50,
+                item: .player(.toxicGreen),
+                title: "COLOR UNLOCKED",
+                detail: "TOXIC LIME HITS THE INVENTORY."
+            )
+        case 60:
+            return StoryCosmeticReward(
+                milestoneLevel: 60,
+                item: .player(.glitchSkin),
+                title: "PATTERN UNLOCKED",
+                detail: "DATA BLOCKS BREAK INTO YOUR LOADOUT."
+            )
+        case 70:
+            return StoryCosmeticReward(
+                milestoneLevel: 70,
+                item: .trail(.electricSparks),
+                title: "TRAIL UNLOCKED",
+                detail: "ELECTRIC SPARKS STARTS THROWING STATIC."
+            )
+        case 80:
+            return StoryCosmeticReward(
+                milestoneLevel: 80,
+                item: .player(.goldenPulse),
+                title: "PREMIUM COLOR UNLOCKED",
+                detail: "GILDED PULSE LANDED FOR FREE."
+            )
+        case 90:
+            return StoryCosmeticReward(
+                milestoneLevel: 90,
+                item: .player(.quantumFracture),
+                title: "PREMIUM PATTERN UNLOCKED",
+                detail: "QUANTUM FRACTURE SHIFTS INTO PLACE."
+            )
+        case 100:
+            return StoryCosmeticReward(
+                milestoneLevel: 100,
+                item: .win(.timeFreezeShatter),
+                title: "PREMIUM WIN FX UNLOCKED",
+                detail: "TIME FREEZE SHATTER NOW CLOSES THE STORY."
             )
         default:
             return nil
@@ -1583,6 +2518,12 @@ final class CosmeticsStore {
         ownedWinAnimations = Set(UserDefaults.standard.stringArray(forKey: ownedWinKey) ?? [WinAnimationStyle.neonExplosion.rawValue])
         ownedTeleporterSkins = Set(UserDefaults.standard.stringArray(forKey: ownedTeleporterKey) ?? [TeleporterSkinStyle.classicPortal.rawValue])
         claimedRewardLevels = Set(UserDefaults.standard.array(forKey: claimedRewardLevelsKey) as? [Int] ?? [])
+        if ownedTrails.remove(TrailStyle.pulseTrail.rawValue) != nil {
+            ownedTrails.insert(TrailStyle.smoothLight.rawValue)
+        }
+        if ownedTrails.remove(TrailStyle.energyBurst.rawValue) != nil {
+            ownedTrails.insert(TrailStyle.phaseStream.rawValue)
+        }
 
         if let raw = UserDefaults.standard.string(forKey: equippedPlayerKey),
            let item = PlayerSkin(rawValue: raw),
@@ -1615,6 +2556,11 @@ final class CosmeticsStore {
         } else {
             selectedTeleporterSkin = .classicPortal
         }
+        if selectedTrail == .pulseTrail {
+            selectedTrail = .smoothLight
+        } else if selectedTrail == .energyBurst {
+            selectedTrail = .phaseStream
+        }
 
         persist()
     }
@@ -1622,16 +2568,18 @@ final class CosmeticsStore {
     func items(for tab: ShopTab) -> [ShopItem] {
         switch tab {
         case .playerColors:
-            return PlayerSkin.allCases.filter { $0.kind == .color }.map(ShopItem.player)
+            return PlayerSkin.shopCases.filter { $0.kind == .color }.map(ShopItem.player)
         case .playerPatterns:
-            return PlayerSkin.allCases.filter { $0.kind == .pattern }.map(ShopItem.player)
+            return PlayerSkin.shopCases.filter { $0.kind == .pattern }.map(ShopItem.player)
         case .trails:
-            return TrailStyle.allCases.map(ShopItem.trail)
+            return TrailStyle.shopCases.map(ShopItem.trail)
         case .winAnimations:
-            return WinAnimationStyle.allCases.map(ShopItem.win)
-        case .teleporters:
-            return TeleporterSkinStyle.allCases.map(ShopItem.teleporter)
+            return WinAnimationStyle.shopCases.map(ShopItem.win)
         }
+    }
+
+    func ownedItems(for tab: ShopTab) -> [ShopItem] {
+        items(for: tab).filter(isOwned)
     }
 
     func isOwned(_ item: ShopItem) -> Bool {
@@ -1667,11 +2615,8 @@ final class CosmeticsStore {
         if isOwned(item) {
             return "OWNED"
         }
-        if let rewardLevel = item.rewardLevel {
-            return "UNLOCK L\(rewardLevel)"
-        }
         if let price = item.price {
-            return "\(price) COINS"
+            return "\(price) C"
         }
         return "LOCKED"
     }
@@ -1684,6 +2629,17 @@ final class CosmeticsStore {
             equip(item)
             return .selected
         }
+        let purchaseResult = purchase(item)
+        if purchaseResult == .purchased {
+            equip(item)
+        }
+        return purchaseResult
+    }
+
+    func purchase(_ item: ShopItem) -> ShopPurchaseResult {
+        if isOwned(item) {
+            return isEquipped(item) ? .alreadySelected : .selected
+        }
         guard let price = item.price else {
             return .rewardOnly
         }
@@ -1691,7 +2647,6 @@ final class CosmeticsStore {
             return .insufficientCoins
         }
         unlock(item)
-        equip(item)
         persist()
         return .purchased
     }
@@ -1787,18 +2742,18 @@ enum CosmeticRenderer {
 
         let aura = SKShapeNode(circleOfRadius: max(8, sprite.size.width * 0.34))
         aura.name = "skin_aura"
-        aura.fillColor = skin.highlightColor.withAlphaComponent(skin == .goldenPulse ? 0.26 : 0.18)
+        aura.fillColor = skin.highlightColor.withAlphaComponent(skin == .goldenPulse ? 0.26 : (skin == .voidCore ? 0.14 : 0.18))
         aura.strokeColor = skin.baseColor.withAlphaComponent(0.26)
         aura.lineWidth = 1
         aura.glowWidth = sprite.size.width * 0.18
         aura.zPosition = -1.4
         aura.run(.repeatForever(.sequence([
             .group([
-                .fadeAlpha(to: skin == .goldenPulse ? 0.62 : 0.44, duration: skin == .electricPurple ? 1.4 : 0.9),
-                .scale(to: 1.06, duration: skin == .electricPurple ? 1.4 : 0.9)
+                .fadeAlpha(to: skin == .goldenPulse ? 0.62 : (skin == .voidCore ? 0.38 : 0.44), duration: skin == .electricPurple ? 1.4 : 0.9),
+                .scale(to: skin == .voidCore ? 1.03 : 1.06, duration: skin == .electricPurple ? 1.4 : 0.9)
             ]),
             .group([
-                .fadeAlpha(to: skin == .goldenPulse ? 0.42 : 0.26, duration: skin == .electricPurple ? 1.4 : 0.9),
+                .fadeAlpha(to: skin == .goldenPulse ? 0.42 : (skin == .voidCore ? 0.18 : 0.26), duration: skin == .electricPurple ? 1.4 : 0.9),
                 .scale(to: 1.0, duration: skin == .electricPurple ? 1.4 : 0.9)
             ])
         ])))
@@ -1834,13 +2789,23 @@ enum CosmeticRenderer {
                 ])))
             case .dualCore:
                 overlay.run(.repeatForever(.sequence([
-                    .colorize(with: SKColor(hex: 0xFF2D9A), colorBlendFactor: 0.24, duration: 1.2),
-                    .colorize(with: SKColor(hex: 0x00D4FF), colorBlendFactor: 0.24, duration: 1.2)
+                    .fadeAlpha(to: 1.0, duration: 0.9),
+                    .fadeAlpha(to: 0.74, duration: 0.9)
+                ])))
+            case .quantumFracture:
+                overlay.run(.repeatForever(.sequence([
+                    .group([.moveBy(x: 1.5, y: -1.5, duration: 0.75), .fadeAlpha(to: 1.0, duration: 0.75)]),
+                    .group([.moveBy(x: -1.5, y: 1.5, duration: 0.0), .fadeAlpha(to: 0.78, duration: 0.0)])
                 ])))
             case .goldenPulse:
                 overlay.run(.repeatForever(.sequence([
                     .fadeAlpha(to: 1.0, duration: 0.5),
                     .fadeAlpha(to: 0.75, duration: 0.5)
+                ])))
+            case .voidCore:
+                overlay.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.66, duration: 0.9),
+                    .fadeAlpha(to: 0.92, duration: 0.9)
                 ])))
             default:
                 break

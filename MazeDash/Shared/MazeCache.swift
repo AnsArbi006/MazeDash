@@ -3,7 +3,7 @@ import Foundation
 final class MazeCache {
     static let shared = MazeCache()
 
-    private let storagePrefix = "maze_cache_v2_"
+    private let storagePrefix = "maze_cache_v9_"
     private let queue = DispatchQueue(label: "maze.cache.queue")
     private var memory: [String: MazeData] = [:]
     private var pending: [String: [(MazeData) -> Void]] = [:]
@@ -72,7 +72,7 @@ final class MazeCache {
             }
             self.pending[key] = [completion]
             DispatchQueue.global(qos: .userInitiated).async {
-                let generated = MazeGenerator.generate(levelIndex: levelIndex, config: config)
+                let generated = self.generateValidMaze(levelIndex: levelIndex, config: config)
                 self.queue.async {
                     self.memory[key] = generated
                     let callbacks = self.pending[key] ?? []
@@ -88,7 +88,7 @@ final class MazeCache {
 
     func generateFresh(levelIndex: Int, config: LevelConfig, seedSalt: Int, completion: @escaping (MazeData) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
-            let generated = MazeGenerator.generate(levelIndex: levelIndex, config: config, seedSalt: seedSalt)
+            let generated = self.generateValidMaze(levelIndex: levelIndex, config: config, seedSalt: seedSalt)
             DispatchQueue.main.async {
                 completion(generated)
             }
@@ -131,7 +131,8 @@ final class MazeCache {
         queue.async {
             guard !self.didStartPrewarmingNormalLevels else { return }
             self.didStartPrewarmingNormalLevels = true
-            let levels = LevelStore.levels
+            let prewarmCeiling = min(LevelStore.levels.count, max(20, ProgressStore.shared.nextPlayableLevelId + 9))
+            let levels = Array(LevelStore.levels.prefix(prewarmCeiling))
             DispatchQueue.global(qos: .utility).async {
                 for level in levels {
                     let config = makeLevelConfig(levelIndex: level.id)
@@ -156,7 +157,7 @@ final class MazeCache {
                         }
                     }
                     guard shouldGenerate else { continue }
-                    let generated = MazeGenerator.generate(levelIndex: level.id - 1, config: config)
+                    let generated = self.generateValidMaze(levelIndex: level.id - 1, config: config)
                     self.queue.sync {
                         self.memory[key] = generated
                         self.saveToDisk(key: key, maze: generated)
@@ -171,7 +172,8 @@ final class MazeCache {
         let loop = String(format: "%.2f", config.loopFactor)
         let branch = String(format: "%.2f", config.branchFactor)
         let mechanics = config.enabledMechanics.map { $0.rawValue }.sorted().joined(separator: "-")
-        return "lvl\(levelIndex)_\(config.mazeSize)x\(config.mazeSize)_l\(loop)_b\(branch)_o\(config.orbCount)_\(mechanics)_ow\(String(format: "%.2f", config.oneWayDensity))_tp\(config.teleporterPairs)_g\(String(format: "%.2f", config.gatePeriod))_k\(config.keyCount)_s\(config.switchCount)_d\(config.doorCount)_f\(config.fogRadius)"
+        let chaser = config.chaserBehavior?.rawValue ?? "none"
+        return "lvl\(levelIndex)_\(config.mazeSize)x\(config.mazeSize)_l\(loop)_b\(branch)_o\(config.orbCount)_\(mechanics)_ow\(String(format: "%.2f", config.oneWayDensity))_tp\(config.teleporterPairs)_g\(String(format: "%.2f", config.gatePeriod))_k\(config.keyCount)_s\(config.switchCount)_d\(config.doorCount)_f\(config.fogRadius)_br\(config.breakableCount)_sb\(config.switchBlockCount)_mb\(config.movingBlockCount)_ch\(chaser)"
     }
 
     private func loadFromDisk(key: String) -> MazeData? {
@@ -192,11 +194,138 @@ final class MazeCache {
         guard maze.rows == expectedSize, maze.cols == expectedSize else { return false }
         guard config.orbCount == 0 || maze.orbs.count <= config.orbCount else { return false }
 
+        let grid = maze.grid.map(Array.init)
+        let analysis = MazeSolvability.analyze(grid: grid, start: maze.start, exit: maze.exit)
+        guard analysis.solvable else { return false }
+
+        let arrowCount = arrowTileCount(in: grid)
+        let breakableCount = tileCount("B", in: grid)
+        let switchTriggerCount = tileCount("T", in: grid)
+        let switchBlockCount = tileCount("X", in: grid)
+        let keyTileCount = tileCount("K", in: grid)
+        let doorTileCount = tileCount("D", in: grid)
+        let gateTileCount = tileCount("G", in: grid)
+        let teleporterPairCount = teleporterPairCount(in: grid)
+        let movingBlockCount = maze.movingBlocks.count
+        let hasChaser = maze.chaserSpawn != nil
+
+        if !config.enabledMechanics.contains(.oneWay), arrowCount > 0 { return false }
+        if !config.enabledMechanics.contains(.breakableWalls), breakableCount > 0 { return false }
+        if !config.enabledMechanics.contains(.switchBlocks), (switchTriggerCount > 0 || switchBlockCount > 0) { return false }
+        if !config.enabledMechanics.contains(.keysDoors), (keyTileCount > 0 || doorTileCount > 0) { return false }
+        if !config.enabledMechanics.contains(.teleporters), teleporterPairCount > 0 { return false }
+        if !config.enabledMechanics.contains(.timingGates), gateTileCount > 0 { return false }
+        if !config.enabledMechanics.contains(.movingBlocks), movingBlockCount > 0 { return false }
+        if !config.enabledMechanics.contains(.chaserEnemy), hasChaser { return false }
+
         if config.enabledMechanics.isEmpty {
             return true
         }
 
-        return MazeSolvability.analyze(grid: maze.grid, start: maze.start, exit: maze.exit).solvable
+        if config.enabledMechanics.contains(.oneWay) {
+            guard arrowCount >= 1 else { return false }
+        }
+
+        if config.enabledMechanics.contains(.breakableWalls) {
+            guard breakableCount >= 1 else { return false }
+            guard MazeSolvability.requiresBreakableUse(grid: grid, start: maze.start, exit: maze.exit) else { return false }
+        }
+
+        if config.enabledMechanics.contains(.switchBlocks) {
+            guard switchTriggerCount >= 1 else { return false }
+            guard switchBlockCount >= 1 else { return false }
+            guard MazeSolvability.requiresSwitchBlockUse(grid: grid, start: maze.start, exit: maze.exit) else { return false }
+        }
+
+        if config.enabledMechanics.contains(.breakableWalls),
+           config.enabledMechanics.contains(.switchBlocks) {
+            guard MazeSolvability.hasFairBreakableSwitchCombo(grid: grid, start: maze.start, exit: maze.exit) else { return false }
+        }
+
+        if config.enabledMechanics.contains(.keysDoors) {
+            guard keyTileCount >= 1 else { return false }
+            guard doorTileCount == 0 else { return false }
+            guard MazeSolvability.canApproachLockedExitWithoutKey(grid: grid, start: maze.start, exit: maze.exit) else { return false }
+        }
+
+        if config.enabledMechanics.contains(.teleporters) {
+            guard teleporterPairCount >= max(1, config.teleporterPairs) else { return false }
+        }
+
+        if config.enabledMechanics.contains(.timingGates) {
+            guard gateTileCount >= 1 else { return false }
+        }
+
+        if config.enabledMechanics.contains(.movingBlocks) {
+            guard movingBlockCount >= max(1, config.movingBlockCount) else { return false }
+            for movingBlock in maze.movingBlocks {
+                let alignedHorizontally = movingBlock.start.row == movingBlock.end.row
+                let alignedVertically = movingBlock.start.col == movingBlock.end.col
+                guard alignedHorizontally || alignedVertically else { return false }
+                guard movingBlock.start != movingBlock.end else { return false }
+            }
+        }
+
+        if config.enabledMechanics.contains(.chaserEnemy) {
+            guard let chaserSpawn = maze.chaserSpawn else { return false }
+            let distance = abs(chaserSpawn.spawn.row - maze.start.row) + abs(chaserSpawn.spawn.col - maze.start.col)
+            guard distance >= 6 else { return false }
+        }
+
+        if config.enabledMechanics.contains(.oneWay) {
+            guard !MazeSolvability.hasReachableSinkState(grid: grid, start: maze.start, exit: maze.exit) else { return false }
+        }
+
+        return true
+    }
+
+    private func tileCount(_ tile: Character, in grid: [[Character]]) -> Int {
+        grid.reduce(into: 0) { count, row in
+            count += row.reduce(into: 0) { rowCount, candidate in
+                if candidate == tile {
+                    rowCount += 1
+                }
+            }
+        }
+    }
+
+    private func arrowTileCount(in grid: [[Character]]) -> Int {
+        grid.reduce(into: 0) { count, row in
+            count += row.reduce(into: 0) { rowCount, tile in
+                if tile == "^" || tile == "v" || tile == "<" || tile == ">" {
+                    rowCount += 1
+                }
+            }
+        }
+    }
+
+    private func teleporterPairCount(in grid: [[Character]]) -> Int {
+        let reservedTiles: Set<Character> = ["S", "E", "O", "K", "T", "D", "G", "B", "X"]
+        var teleporterTiles = 0
+        for row in grid {
+            for tile in row {
+                guard tile.isASCII, tile.isLetter, tile.isUppercase else { continue }
+                if !reservedTiles.contains(tile) {
+                    teleporterTiles += 1
+                }
+            }
+        }
+        return teleporterTiles / 2
+    }
+
+    private func generateValidMaze(levelIndex: Int, config: LevelConfig, seedSalt: Int = 0) -> MazeData {
+        let maxAttempts = 12
+        var lastCandidate: MazeData?
+
+        for attempt in 0..<maxAttempts {
+            let candidate = MazeGenerator.generate(levelIndex: levelIndex, config: config, seedSalt: seedSalt + attempt)
+            lastCandidate = candidate
+            if isMazeValid(candidate, config: config) {
+                return candidate
+            }
+        }
+
+        return lastCandidate ?? MazeGenerator.generate(levelIndex: levelIndex, config: config, seedSalt: seedSalt)
     }
 
     private func generateChallengeMaze(
@@ -259,6 +388,11 @@ final class MazeCache {
         plan: ChallengeGenerationPlan,
         evaluation: MazeGenerator.ChallengeCandidateEvaluation
     ) -> Bool {
+        let grid = maze.grid.map(Array.init)
+        guard !MazeSolvability.hasReachableSinkState(grid: grid, start: maze.start, exit: maze.exit) else {
+            return false
+        }
+
         if plan.isRewardMaze {
             guard maze.shortestPath >= max(12, plan.shortestPathRange.lowerBound - 4) else { return false }
             guard evaluation.directness <= plan.directnessRange.upperBound + 0.2 else { return false }

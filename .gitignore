@@ -1,4 +1,5 @@
 .DS_Store
+.claude/
 
 # Local audit / QA / release artifacts
 .audit/
@@ -14,6 +15,8 @@
 # Local Xcode user data / backups
 MazeDash.xcodeproj/xcuserdata/
 MazeDash.xcodeproj.pre-rebuild-backup/
+MazeDash.xcodeproj.zip
+*.bak
 
 # Generated screenshots and raw captures
 AppStoreScreenshots/raw/
@@ -21,3 +24,10 @@ AppStoreScreenshots/level-types/raw/
 
 # Local helper outputs
 Versions/_snapshots/*.tar.gz
+
+# Backend local dependencies / state
+backend/leaderboard-worker/node_modules/
+backend/leaderboard-worker/.wrangler/
+backend/leaderboard-worker/.dev.vars
+backend/leaderboard-worker/.env
+backend/leaderboard-worker/.env.*

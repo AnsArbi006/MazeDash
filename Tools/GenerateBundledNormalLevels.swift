@@ -65,7 +65,8 @@ private func mazeLiteral(levelId: Int, maze: MazeData) -> String {
 @main
 struct GenerateBundledNormalLevelsMain {
     static func main() throws {
-        let outputPath = "/Users/ans/.codex/worktrees/0515/MazeDash/MazeDash Shared/BundledNormalLevels.swift"
+        let outputPath = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("MazeDash/Shared/BundledNormalLevels.swift")
         var entries: [String] = []
         for levelId in 1...30 {
             let config = makeLevelConfig(levelIndex: levelId)
@@ -83,7 +84,7 @@ struct GenerateBundledNormalLevelsMain {
         }
         """
 
-        try fileContents.write(to: URL(fileURLWithPath: outputPath), atomically: true, encoding: .utf8)
+        try fileContents.write(to: outputPath, atomically: true, encoding: .utf8)
         print("Wrote bundled normal levels to \(outputPath)")
     }
 }

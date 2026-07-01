@@ -121,6 +121,10 @@ final class ScrollContainerNode: SKNode {
 
     private func updateContentPosition() {
         guard viewportSize != .zero else { return }
-        contentNode.position = CGPoint(x: -viewportSize.width / 2, y: viewportSize.height / 2 + scrollOffset)
+        let verticalInset = max(0, (viewportSize.height - contentHeight) * 0.5)
+        contentNode.position = CGPoint(
+            x: -viewportSize.width / 2,
+            y: viewportSize.height / 2 - verticalInset + scrollOffset
+        )
     }
 }

@@ -8,20 +8,19 @@ final class StartScene: SKScene {
         static let sidePadding: CGFloat = 20
         static let topMargin: CGFloat = 14
         static let buttonSpacing: CGFloat = 12
-        static let statSpacing: CGFloat = 10
         static let baseBackgroundAlpha: CGFloat = 1.0
         static let vignetteAlpha: CGFloat = 0.25
         static let energyFieldAlpha: CGFloat = 0.16
         static let energyAccentAlpha: CGFloat = 0.07
         static let gridAlpha: CGFloat = 0.07
         static let gridSpeed: CGFloat = 8.0
-        static let farParticleCount = 40
-        static let mediumParticleCount = 18
-        static let nearParticleCount = 7
-        static let floatingAccentCount = 14
-        static let sparkleCount = 10
-        static let foregroundCapsuleCount = 3
-        static let foregroundShardCount = 5
+        static let farParticleCount = 20
+        static let mediumParticleCount = 9
+        static let nearParticleCount = 4
+        static let floatingAccentCount = 7
+        static let sparkleCount = 5
+        static let foregroundCapsuleCount = 2
+        static let foregroundShardCount = 3
         static let farParticleSpeed: ClosedRange<CGFloat> = 4...8
         static let mediumParticleSpeed: ClosedRange<CGFloat> = 8...14
         static let nearParticleSpeed: ClosedRange<CGFloat> = 14...20
@@ -52,23 +51,6 @@ final class StartScene: SKScene {
 
     private let titleLabel = SKLabelNode(fontNamed: ArcadeFont.title)
     private let subtitleLabel = SKLabelNode(fontNamed: ArcadeFont.body)
-    private let heroCard = SKSpriteNode()
-    private let heroTrackNode = SKShapeNode()
-    private let heroTrackGlowNode = SKShapeNode()
-    private let heroBlock = SKSpriteNode()
-    private let heroExit = SKSpriteNode()
-    private let heroOrb = SKSpriteNode()
-    private let heroCaptionLabel = SKLabelNode(fontNamed: ArcadeFont.body)
-    private let heroValueLabel = SKLabelNode(fontNamed: ArcadeFont.digits)
-    private let heroMetaLabel = SKLabelNode(fontNamed: ArcadeFont.body)
-    private let heroFooterLabel = SKLabelNode(fontNamed: ArcadeFont.body)
-
-    private let statContainer = SKNode()
-    private var statCards: [SKSpriteNode] = []
-    private var statTitles: [SKLabelNode] = []
-    private var statTitleShadows: [SKLabelNode] = []
-    private var statValues: [SKLabelNode] = []
-    private var statValueShadows: [SKLabelNode] = []
     private let infoLabel = SKLabelNode(fontNamed: ArcadeFont.body)
 
     private let buttonContainer = SKNode()
@@ -189,6 +171,18 @@ final class StartScene: SKScene {
         case "levels":
             guard let view else { return true }
             let scene = LevelSelectScene(size: size)
+            scene.scaleMode = .resizeFill
+            view.presentScene(scene, transition: transition)
+            return true
+        case "challenge":
+            guard let view else { return true }
+            let scene = ChallengeSelectScene(size: size)
+            scene.scaleMode = .resizeFill
+            view.presentScene(scene, transition: transition)
+            return true
+        case "shop":
+            guard let view else { return true }
+            let scene = ShopScene(size: size)
             scene.scaleMode = .resizeFill
             view.presentScene(scene, transition: transition)
             return true
@@ -328,7 +322,7 @@ final class StartScene: SKScene {
         titleLabel.zPosition = 20
         contentNode.addChild(titleLabel)
 
-        subtitleLabel.text = "Swipe. Flow. Escape."
+        subtitleLabel.text = "Dash the line. Clear the sector."
         subtitleLabel.fontSize = ArcadeStyle.FontSize.menuSubtitle
         subtitleLabel.fontColor = ArcadeStyle.Color.textSecondary
         subtitleLabel.horizontalAlignmentMode = .center
@@ -336,117 +330,6 @@ final class StartScene: SKScene {
         subtitleLabel.alpha = 0
         subtitleLabel.zPosition = 20
         contentNode.addChild(subtitleLabel)
-    }
-
-    private func setupHero() {
-        heroCard.zPosition = 15
-        contentNode.addChild(heroCard)
-
-        heroTrackGlowNode.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.22)
-        heroTrackGlowNode.lineWidth = 10
-        heroTrackGlowNode.lineCap = .round
-        heroTrackGlowNode.glowWidth = 0
-        heroTrackGlowNode.zPosition = 0.8
-        heroCard.addChild(heroTrackGlowNode)
-
-        heroTrackNode.strokeColor = ArcadeStyle.Color.accentCyan.withAlphaComponent(0.95)
-        heroTrackNode.lineWidth = 3
-        heroTrackNode.lineCap = .round
-        heroTrackNode.zPosition = 1
-        heroCard.addChild(heroTrackNode)
-
-        heroBlock.texture = TextureFactory.shared.playerTexture(size: CGSize(width: 42, height: 42))
-        applySelectedSkin(to: heroBlock)
-        heroBlock.zPosition = 3
-        heroCard.addChild(heroBlock)
-
-        heroExit.texture = TextureFactory.shared.exitTexture(size: CGSize(width: 44, height: 44))
-        heroExit.zPosition = 2
-        heroCard.addChild(heroExit)
-
-        heroOrb.texture = TextureFactory.shared.orbTexture(size: CGSize(width: 18, height: 18))
-        heroOrb.zPosition = 2
-        heroCard.addChild(heroOrb)
-
-        heroCaptionLabel.fontSize = 11
-        heroCaptionLabel.fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.82)
-        heroCaptionLabel.horizontalAlignmentMode = .left
-        heroCaptionLabel.verticalAlignmentMode = .center
-        heroCaptionLabel.zPosition = 6
-        heroCard.addChild(heroCaptionLabel)
-
-        heroValueLabel.fontSize = 16
-        heroValueLabel.fontColor = ArcadeStyle.Color.textPrimary
-        heroValueLabel.horizontalAlignmentMode = .left
-        heroValueLabel.verticalAlignmentMode = .center
-        heroValueLabel.zPosition = 6
-        heroCard.addChild(heroValueLabel)
-
-        heroMetaLabel.fontSize = 11
-        heroMetaLabel.fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.76)
-        heroMetaLabel.horizontalAlignmentMode = .left
-        heroMetaLabel.verticalAlignmentMode = .center
-        heroMetaLabel.zPosition = 6
-        heroCard.addChild(heroMetaLabel)
-
-        heroFooterLabel.fontSize = 11
-        heroFooterLabel.fontColor = ArcadeStyle.Color.textPrimary.withAlphaComponent(0.64)
-        heroFooterLabel.horizontalAlignmentMode = .left
-        heroFooterLabel.verticalAlignmentMode = .center
-        heroFooterLabel.zPosition = 6
-        heroCard.addChild(heroFooterLabel)
-    }
-
-    private func setupStats() {
-        statContainer.zPosition = 18
-        contentNode.addChild(statContainer)
-
-        let titles = ["CLEARED", "STARS", "COINS", "BEST"]
-        for title in titles {
-            let card = SKSpriteNode()
-            let titleShadow = SKLabelNode(fontNamed: ArcadeFont.body)
-            let titleLabel = SKLabelNode(fontNamed: ArcadeFont.body)
-            let valueShadow = SKLabelNode(fontNamed: ArcadeFont.digits)
-            let valueLabel = SKLabelNode(fontNamed: ArcadeFont.digits)
-
-            titleShadow.text = title
-            titleShadow.fontSize = 11
-            titleShadow.fontColor = SKColor(white: 0.0, alpha: 0.62)
-            titleShadow.horizontalAlignmentMode = .center
-            titleShadow.verticalAlignmentMode = .center
-            titleShadow.zPosition = 4
-
-            titleLabel.text = title
-            titleLabel.fontSize = 11
-            titleLabel.fontColor = ArcadeStyle.Color.textSecondary
-            titleLabel.horizontalAlignmentMode = .center
-            titleLabel.verticalAlignmentMode = .center
-            titleLabel.zPosition = 5
-
-            valueShadow.fontSize = 18
-            valueShadow.fontColor = SKColor(white: 0.0, alpha: 0.74)
-            valueShadow.horizontalAlignmentMode = .center
-            valueShadow.verticalAlignmentMode = .center
-            valueShadow.zPosition = 4
-
-            valueLabel.fontSize = 18
-            valueLabel.fontColor = ArcadeStyle.Color.textPrimary
-            valueLabel.horizontalAlignmentMode = .center
-            valueLabel.verticalAlignmentMode = .center
-            valueLabel.zPosition = 5
-
-            card.addChild(titleShadow)
-            card.addChild(titleLabel)
-            card.addChild(valueShadow)
-            card.addChild(valueLabel)
-            statContainer.addChild(card)
-
-            statCards.append(card)
-            statTitles.append(titleLabel)
-            statTitleShadows.append(titleShadow)
-            statValues.append(valueLabel)
-            statValueShadows.append(valueShadow)
-        }
     }
 
     private func setupButtons() {
@@ -458,9 +341,13 @@ final class StartScene: SKScene {
         challengeButton.setAccentColor(ArcadeStyle.Color.accentCyan.withAlphaComponent(0.98))
         continueButton.setAccentColor(ArcadeStyle.Color.accentYellow.withAlphaComponent(0.98))
         levelsButton.setAccentColor(ArcadeStyle.Color.accentCyan.withAlphaComponent(0.82))
-        settingsButton.setAccentColor(ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.9))
+        settingsButton.setAccentColor(ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.82))
         dailyButton.setAccentColor(ArcadeStyle.Color.accentMagenta.withAlphaComponent(0.94))
         shopButton.setAccentColor(ArcadeStyle.Color.accentYellow.withAlphaComponent(0.94))
+
+        continueButton.setEmphasisStyle(.primary)
+        challengeButton.setEmphasisStyle(.quiet)
+        levelsButton.setEmphasisStyle(.quiet)
 
         continueDetailLabel.fontSize = 10
         continueDetailLabel.fontColor = ArcadeStyle.Color.textSecondary
@@ -507,8 +394,8 @@ final class StartScene: SKScene {
         buttonContainer.addChild(challengeButton)
         buttonContainer.addChild(continueButton)
         buttonContainer.addChild(levelsButton)
-        buttonContainer.addChild(settingsButton)
         utilityContainer.addChild(dailyButton)
+        utilityContainer.addChild(settingsButton)
         utilityContainer.addChild(shopButton)
     }
 
@@ -1529,20 +1416,21 @@ final class StartScene: SKScene {
 
     private func refreshContent() {
         let continueLevel = ProgressStore.shared.continueLevelId
+        let chapter = storyChapter(for: continueLevel)
         refreshBackground()
 
         challengeButton.label.text = "TIME CHALLENGE"
-        challengeDetailLabel.text = nil
-        challengeDetailLabel.isHidden = true
+        challengeDetailLabel.text = "1 • 2 • 3 MIN"
+        challengeDetailLabel.isHidden = false
         levelsButton.label.text = "LEVELS"
         continueButton.label.text = "CONTINUE"
-        continueDetailLabel.text = "LEVEL \(continueLevel)"
+        continueDetailLabel.text = "LEVEL \(continueLevel) • \(chapter.shortCode)"
         dailyButton.label.text = "DAILY"
         shopButton.label.text = "SHOP"
         settingsButton.label.text = "SETTINGS"
 
-        infoLabel.text = nil
-        infoLabel.isHidden = true
+        infoLabel.text = "\(ProgressStore.shared.completedLevelCount) CLEARED • \(ProgressStore.shared.totalStars) STARS"
+        infoLabel.isHidden = false
 
         settingsOverlay?.refresh()
         dailyPromptOverlay?.refresh()
@@ -1556,95 +1444,94 @@ final class StartScene: SKScene {
         subtitleLabel.fontSize = 12
 
         let contentWidth = min(safeWidth - Metric.sidePadding * 2, 338)
-
-        statContainer.removeAllChildren()
-        statCards.removeAll()
-        statTitles.removeAll()
-        statTitleShadows.removeAll()
-        statValues.removeAll()
-        statValueShadows.removeAll()
-
         let actionGap: CGFloat = 12
-        let challengeSize = snapSize(CGSize(width: contentWidth, height: 92))
-        let continueSize = snapSize(CGSize(width: contentWidth, height: 70))
+        let continueSize = snapSize(CGSize(width: contentWidth, height: 92))
+        let challengeSize = snapSize(CGSize(width: contentWidth, height: 70))
         let utilityButtonHeight: CGFloat = 44
-        let levelsSize = snapSize(CGSize(width: floor((contentWidth - actionGap) / 2), height: 58))
-        let settingsSize = levelsSize
+        let utilityButtonWidth: CGFloat = floor((contentWidth - actionGap * 2) / 3)
+        let levelsSize = snapSize(CGSize(width: contentWidth, height: 58))
+        let settingsSize = snapSize(CGSize(width: utilityButtonWidth, height: utilityButtonHeight))
         challengeButton.size = challengeSize
         continueButton.size = continueSize
         levelsButton.size = levelsSize
         settingsButton.size = settingsSize
-        dailyButton.size = snapSize(CGSize(width: 124, height: utilityButtonHeight))
-        shopButton.size = snapSize(CGSize(width: 104, height: utilityButtonHeight))
+        dailyButton.size = snapSize(CGSize(width: utilityButtonWidth, height: utilityButtonHeight))
+        shopButton.size = snapSize(CGSize(width: utilityButtonWidth, height: utilityButtonHeight))
 
-        challengeButton.label.fontSize = 23
-        challengeButton.label.horizontalAlignmentMode = .left
-        challengeButton.label.position = snap(CGPoint(x: -challengeSize.width / 2 + 92, y: 1))
-        challengeDetailLabel.isHidden = true
+        challengeButton.alpha = 1.0
+        continueButton.alpha = 1.0
+        levelsButton.alpha = 0.94
+        settingsButton.alpha = 0.86
+        dailyButton.alpha = 0.86
+        shopButton.alpha = 0.86
 
-        continueButton.label.fontSize = 20
+        continueButton.label.fontSize = 23
         continueButton.label.horizontalAlignmentMode = .left
-        continueButton.label.position = snap(CGPoint(x: -continueSize.width / 2 + 86, y: 10))
+        continueButton.label.position = snap(CGPoint(x: -continueSize.width / 2 + 92, y: 1))
         continueDetailLabel.fontSize = 10
-        continueDetailLabel.position = snap(CGPoint(x: -continueSize.width / 2 + 86, y: -12))
+        continueDetailLabel.horizontalAlignmentMode = .left
+        continueDetailLabel.position = snap(CGPoint(x: -continueSize.width / 2 + 92, y: -18))
+
+        challengeButton.label.fontSize = 20
+        challengeButton.label.horizontalAlignmentMode = .left
+        challengeButton.label.position = snap(CGPoint(x: -challengeSize.width / 2 + 86, y: 10))
+        challengeDetailLabel.fontSize = 10
+        challengeDetailLabel.horizontalAlignmentMode = .left
+        challengeDetailLabel.position = snap(CGPoint(x: -challengeSize.width / 2 + 86, y: -12))
 
         levelsButton.label.fontSize = 17
         levelsButton.label.horizontalAlignmentMode = .center
         levelsButton.label.position = snap(CGPoint(x: 0, y: 1))
 
-        settingsButton.label.fontSize = 16
-        settingsButton.label.horizontalAlignmentMode = .left
-        settingsButton.label.position = snap(CGPoint(x: -settingsSize.width / 2 + 64, y: 1))
+        settingsButton.label.fontSize = 11
+        settingsButton.label.horizontalAlignmentMode = .center
+        settingsButton.label.position = snap(CGPoint(x: 0, y: -13))
 
         dailyButton.label.fontSize = 11
-        dailyButton.label.horizontalAlignmentMode = .left
-        dailyButton.label.position = snap(CGPoint(x: -dailyButton.size.width / 2 + 46, y: 1))
-        shopButton.label.fontSize = 12
-        shopButton.label.horizontalAlignmentMode = .left
-        shopButton.label.position = snap(CGPoint(x: -shopButton.size.width / 2 + 46, y: 1))
+        dailyButton.label.horizontalAlignmentMode = .center
+        dailyButton.label.position = snap(CGPoint(x: 0, y: -13))
+        shopButton.label.fontSize = 11
+        shopButton.label.horizontalAlignmentMode = .center
+        shopButton.label.position = snap(CGPoint(x: 0, y: -13))
 
         challengeIconNode.position = snap(CGPoint(x: -challengeSize.width / 2 + 42, y: 0))
         continueIconNode.position = snap(CGPoint(x: -continueSize.width / 2 + 42, y: 0))
-        settingsIconNode.position = snap(CGPoint(x: -settingsSize.width / 2 + 28, y: 0))
-        dailyIconNode.position = snap(CGPoint(x: -dailyButton.size.width / 2 + 22, y: 0))
-        shopIconNode.position = snap(CGPoint(x: -shopButton.size.width / 2 + 22, y: 0))
+        settingsIconNode.position = snap(CGPoint(x: 0, y: 9))
+        dailyIconNode.position = snap(CGPoint(x: 0, y: 9))
+        shopIconNode.position = snap(CGPoint(x: 0, y: 9))
 
-        let utilityY = safeTop - utilityButtonHeight / 2
-        utilityContainer.position = snap(CGPoint(x: 0, y: utilityY))
-        let utilityTrailing = safeWidth / 2 - Metric.sidePadding
-        let utilityLeading = -safeWidth / 2 + Metric.sidePadding
-        shopButton.position = snap(CGPoint(x: utilityTrailing - shopButton.size.width / 2, y: 0))
-        dailyButton.position = snap(CGPoint(x: utilityLeading + dailyButton.size.width / 2, y: 0))
-
-        let titleBlockHeight: CGFloat = 58
-        let titleToButtonsSpacing: CGFloat = 24
-        let buttonsToInfoSpacing: CGFloat = 0
-        let infoHeight: CGFloat = 0
-        let actionRowHeight = max(levelsButton.size.height, settingsButton.size.height)
-        let buttonStackHeight = challengeButton.size.height + continueButton.size.height + actionRowHeight + Metric.buttonSpacing * 2
+        let titleBlockHeight: CGFloat = 56
+        let titleToButtonsSpacing: CGFloat = 20
+        let utilityRowHeight = utilityButtonHeight
+        let buttonStackHeight = challengeButton.size.height + continueButton.size.height + levelsButton.size.height + utilityRowHeight + Metric.buttonSpacing * 3
+        let buttonsToInfoSpacing: CGFloat = 12
+        let infoHeight: CGFloat = 14
+        let infoCenterY = safeBottom + infoHeight / 2 + 20
+        let usableBottom = infoCenterY + infoHeight / 2
+        let safeHeight = safeTop - usableBottom
         let totalStackHeight = titleBlockHeight + titleToButtonsSpacing + buttonStackHeight + buttonsToInfoSpacing + infoHeight
-        let safeHeight = safeTop - safeBottom
-        let stackTop = safeBottom + (safeHeight + totalStackHeight) / 2 - 4
+        let stackTop = usableBottom + (safeHeight + totalStackHeight) / 2 - 6
         let titleCenterY = stackTop - titleBlockHeight / 2
         let buttonsCenterY = titleCenterY - titleBlockHeight / 2 - titleToButtonsSpacing - buttonStackHeight / 2
-        let infoCenterY = buttonsCenterY - buttonStackHeight / 2 - buttonsToInfoSpacing - infoHeight / 2
 
-        titleLabel.position = snap(CGPoint(x: 0, y: titleCenterY + 10))
-        subtitleLabel.position = snap(CGPoint(x: 0, y: titleCenterY - 15))
+        titleLabel.position = snap(CGPoint(x: 0, y: titleCenterY + 8))
+        subtitleLabel.position = snap(CGPoint(x: 0, y: titleCenterY - 14))
         buttonContainer.position = snap(CGPoint(x: 0, y: buttonsCenterY))
 
-        let challengeY = buttonStackHeight / 2 - challengeButton.size.height / 2
-        let continueY = challengeY - challengeButton.size.height / 2 - Metric.buttonSpacing - continueButton.size.height / 2
-        let actionRowY = continueY - continueButton.size.height / 2 - Metric.buttonSpacing - actionRowHeight / 2
-        let actionRowWidth = levelsButton.size.width + actionGap + settingsButton.size.width
-        let levelsX = -actionRowWidth / 2 + levelsButton.size.width / 2
-        let settingsX = actionRowWidth / 2 - settingsButton.size.width / 2
+        let continueY = buttonStackHeight / 2 - continueButton.size.height / 2
+        let challengeY = continueY - continueButton.size.height / 2 - Metric.buttonSpacing - challengeButton.size.height / 2
+        let levelsY = challengeY - challengeButton.size.height / 2 - Metric.buttonSpacing - levelsButton.size.height / 2
+        let utilityY = levelsY - levelsButton.size.height / 2 - Metric.buttonSpacing - utilityRowHeight / 2
+        let utilityRowWidth = dailyButton.size.width + settingsButton.size.width + shopButton.size.width + actionGap * 2
 
         challengeButton.position = snap(CGPoint(x: 0, y: challengeY))
         continueButton.position = snap(CGPoint(x: 0, y: continueY))
-        levelsButton.position = snap(CGPoint(x: levelsX, y: actionRowY))
-        settingsButton.position = snap(CGPoint(x: settingsX, y: actionRowY))
-        infoLabel.position = snap(CGPoint(x: 0, y: max(safeBottom + 12, infoCenterY)))
+        levelsButton.position = snap(CGPoint(x: 0, y: levelsY))
+        utilityContainer.position = snap(CGPoint(x: 0, y: buttonsCenterY + utilityY))
+        dailyButton.position = snap(CGPoint(x: -utilityRowWidth / 2 + dailyButton.size.width / 2, y: 0))
+        settingsButton.position = snap(CGPoint(x: 0, y: 0))
+        shopButton.position = snap(CGPoint(x: utilityRowWidth / 2 - shopButton.size.width / 2, y: 0))
+        infoLabel.position = snap(CGPoint(x: 0, y: infoCenterY))
 
         settingsOverlay?.applyLayout(in: size, safeInsets: safeInsets)
         dailyPromptOverlay?.applyLayout(in: size, safeInsets: safeInsets)
@@ -1662,16 +1549,6 @@ final class StartScene: SKScene {
             .fadeIn(withDuration: 0.22)
         ]))
 
-        challengeButton.run(.repeatForever(.sequence([
-            .wait(forDuration: 1.0),
-            .scale(to: 1.025, duration: 0.18),
-            .scale(to: 1.0, duration: 0.18)
-        ])), withKey: "ctaPulse")
-        dailyButton.run(.repeatForever(.sequence([
-            .wait(forDuration: 2.2),
-            .moveBy(x: 0, y: 2, duration: 0.18),
-            .moveBy(x: 0, y: -2, duration: 0.22)
-        ])), withKey: "dailyFloat")
     }
 
     private func playTap() {
@@ -1874,6 +1751,10 @@ final class StartScene: SKScene {
             return "ARCTIC DRIVE"
         case .ember:
             return "EMBER SHIFT"
+        case .nightSignal:
+            return "NIGHT SIGNAL"
+        case .prismShift:
+            return "PRISM SHIFT"
         }
     }
 
@@ -2493,7 +2374,14 @@ private final class ChallengeDurationCardNode: SKNode {
         let best = ChallengeStore.shared.best(for: duration)
         titleLabel.text = duration.title
         bestLabel.text = "BEST \(best)"
-        detailLabel.text = duration.summaryLine
+        switch duration {
+        case .oneMinute:
+            detailLabel.text = "SHORT SPRINT"
+        case .twoMinutes:
+            detailLabel.text = "STEADY RUN"
+        case .threeMinutes:
+            detailLabel.text = "LONG PUSH"
+        }
         layoutContent()
     }
 
@@ -2749,6 +2637,35 @@ private final class ShopItemCardNode: SKNode {
                     .group([.fadeAlpha(to: 0.85, duration: 0.35), .scaleY(to: 1.1, duration: 0.35)]),
                     .group([.fadeAlpha(to: 0.3, duration: 0.35), .scaleY(to: 0.9, duration: 0.35)])
                 ])))
+            case .timeFreezeShatter:
+                let ring = SKShapeNode(circleOfRadius: 16)
+                ring.strokeColor = item.accentColor
+                ring.lineWidth = 2
+                ring.glowWidth = 6
+                ring.fillColor = .clear
+                previewContainer.addChild(ring)
+                ring.run(.repeatForever(.sequence([
+                    .group([.scale(to: 1.35, duration: 0.4), .fadeOut(withDuration: 0.4)]),
+                    .group([.scale(to: 0.55, duration: 0.0), .fadeAlpha(to: 0.95, duration: 0.0)])
+                ])))
+
+                for index in 0..<4 {
+                    let shard = SKSpriteNode(color: item.accentColor.withAlphaComponent(0.85), size: CGSize(width: 4, height: 14))
+                    shard.position = .zero
+                    shard.zRotation = CGFloat(index) * (.pi / 2)
+                    previewContainer.addChild(shard)
+                    let angle = CGFloat(index) / 4 * .pi * 2
+                    shard.run(.repeatForever(.sequence([
+                        .group([
+                            .moveBy(x: cos(angle) * 16, y: sin(angle) * 16, duration: 0.4),
+                            .fadeOut(withDuration: 0.4)
+                        ]),
+                        .group([
+                            .move(to: .zero, duration: 0.0),
+                            .fadeAlpha(to: 0.85, duration: 0.0)
+                        ])
+                    ])))
+                }
             }
         case let .teleporter(style):
             let portal = SKSpriteNode(texture: TextureFactory.shared.teleporterTexture(size: CGSize(width: 40, height: 40), style: style, accentColor: item.accentColor))
@@ -2771,7 +2688,6 @@ final class ChallengeSelectScene: SKScene {
     private let hudNode = SKNode()
     private let topBar = TopBarNode(title: "TIME CHALLENGE")
     private let subtitleLabel = SKLabelNode(fontNamed: ArcadeFont.body)
-    private let footerLabel = SKLabelNode(fontNamed: ArcadeFont.body)
     private let contentNode = SKNode()
     private let optionNodes = TimeChallengeDuration.allCases.map { ChallengeDurationCardNode(duration: $0) }
 
@@ -2814,21 +2730,13 @@ final class ChallengeSelectScene: SKScene {
         }
         hudNode.addChild(topBar)
 
-        subtitleLabel.text = "Pick a clock. Clear as many mazes as you can before time runs out."
+        subtitleLabel.text = "Pick a clock. Clear fast."
         subtitleLabel.fontSize = 12
         subtitleLabel.fontColor = ArcadeStyle.Color.textSecondary
         subtitleLabel.horizontalAlignmentMode = .center
         subtitleLabel.verticalAlignmentMode = .center
         subtitleLabel.zPosition = 10
         contentNode.addChild(subtitleLabel)
-
-        footerLabel.text = "NO COINS · PURE RECORD CHASE · QUICK RESTARTS"
-        footerLabel.fontSize = 10
-        footerLabel.fontColor = ArcadeStyle.Color.textMuted
-        footerLabel.horizontalAlignmentMode = .center
-        footerLabel.verticalAlignmentMode = .center
-        footerLabel.zPosition = 10
-        contentNode.addChild(footerLabel)
 
         for node in optionNodes {
             node.button.onTap = { [weak self, weak node] in
@@ -2854,13 +2762,12 @@ final class ChallengeSelectScene: SKScene {
         topBar.layout(width: topBarWidth, height: topBarHeight)
 
         subtitleLabel.position = snap(CGPoint(x: 0, y: topBarY - topBarHeight / 2 - 22))
-        footerLabel.position = snap(CGPoint(x: 0, y: safeBottom + 18))
 
         let cardWidth = min(safeWidth - 40, 336)
         let cardHeight: CGFloat = 88
         let spacing: CGFloat = 14
         let totalHeight = CGFloat(optionNodes.count) * cardHeight + CGFloat(optionNodes.count - 1) * spacing
-        let centerY = (subtitleLabel.position.y - 28 + footerLabel.position.y + 40) / 2
+        let centerY = (subtitleLabel.position.y - 28 + (safeBottom + 18) + 40) / 2
         let startY = centerY + totalHeight / 2 - cardHeight / 2
 
         for (index, node) in optionNodes.enumerated() {
@@ -2962,11 +2869,11 @@ fileprivate final class MenuBackdropNode: SKNode {
         static let energyAccentAlpha: CGFloat = 0.06
         static let gridAlpha: CGFloat = 0.07
         static let gridSpeed: CGFloat = 8.0
-        static let farParticleCount = 26
-        static let mediumParticleCount = 12
-        static let nearParticleCount = 5
-        static let floatingAccentCount = 10
-        static let sparkleCount = 8
+        static let farParticleCount = 13
+        static let mediumParticleCount = 6
+        static let nearParticleCount = 3
+        static let floatingAccentCount = 5
+        static let sparkleCount = 4
     }
 
     private let backgroundNode = SKSpriteNode()
@@ -3648,7 +3555,7 @@ private final class DailyBotCardNode: SKNode {
         titleLabel.zPosition = 4
         button.addChild(titleLabel)
 
-        rewardLabel.fontSize = 16
+        rewardLabel.fontSize = 17
         rewardLabel.fontColor = ArcadeStyle.Color.accentYellow
         rewardLabel.horizontalAlignmentMode = .right
         rewardLabel.verticalAlignmentMode = .center
@@ -3662,7 +3569,7 @@ private final class DailyBotCardNode: SKNode {
         detailLabel.zPosition = 4
         button.addChild(detailLabel)
 
-        statusLabel.fontSize = 10
+        statusLabel.fontSize = 11
         statusLabel.fontColor = ArcadeStyle.Color.textMuted
         statusLabel.horizontalAlignmentMode = .right
         statusLabel.verticalAlignmentMode = .center
@@ -3692,7 +3599,7 @@ private final class DailyBotCardNode: SKNode {
         titleLabel.text = difficulty == .hard ? "HARD BOT" : "EASY BOT"
         let rewardAmount = DailyChallengeStore.shared.rewardAmount(for: difficulty, descriptor: descriptor)
         rewardLabel.text = "+\(rewardAmount)"
-        detailLabel.text = difficulty == .hard ? "OPTIMAL PATHING · BIGGER PAYOUT" : "WALL FOLLOWER · DAILY ENTRY REWARD"
+        detailLabel.text = difficulty == .hard ? "OPTIMAL PATHING" : "WALL FOLLOWER"
         let claimed = DailyChallengeStore.shared.isRewardClaimed(difficulty, for: descriptor)
         showsCompletedState = claimed
         button.removeAction(forKey: "dailyCompleteBounce")
@@ -3733,7 +3640,7 @@ private final class DailyBotCardNode: SKNode {
         let width = button.size.width
         completionTintNode.size = CGSize(width: max(0, width - 10), height: max(0, button.size.height - 10))
         titleLabel.position = snap(CGPoint(x: -width / 2 + 18, y: 12))
-        rewardLabel.position = snap(CGPoint(x: width / 2 - 18, y: 12))
+        rewardLabel.position = snap(CGPoint(x: width / 2 - 18, y: 13))
         detailLabel.position = snap(CGPoint(x: -width / 2 + 18, y: -14))
         if showsCompletedState {
             statusLabel.position = snap(CGPoint(x: width / 2 - 44, y: -14))
@@ -3783,7 +3690,6 @@ final class DailyChallengeScene: SKScene {
     private let subtitleLabel = SKLabelNode(fontNamed: ArcadeFont.body)
     private let dayLabel = SKLabelNode(fontNamed: ArcadeFont.header)
     private let bestLabel = SKLabelNode(fontNamed: ArcadeFont.digits)
-    private let footerLabel = SKLabelNode(fontNamed: ArcadeFont.body)
     private let contentNode = SKNode()
     private let easyNode = DailyBotCardNode(difficulty: .easy)
     private let hardNode = DailyBotCardNode(difficulty: .hard)
@@ -3827,7 +3733,7 @@ final class DailyChallengeScene: SKScene {
         }
         hudNode.addChild(topBar)
 
-        subtitleLabel.text = "One fixed maze today. Beat the bot for coins, then come back tomorrow for a new seed."
+        subtitleLabel.text = "One maze today. Beat the bot for coins."
         subtitleLabel.fontSize = 12
         subtitleLabel.fontColor = ArcadeStyle.Color.textSecondary
         subtitleLabel.horizontalAlignmentMode = .center
@@ -3850,14 +3756,6 @@ final class DailyChallengeScene: SKScene {
         bestLabel.verticalAlignmentMode = .center
         bestLabel.zPosition = 10
         contentNode.addChild(bestLabel)
-
-        footerLabel.text = "SAME MAZE ALL DAY · EASY + COINS · HARD + MORE COINS"
-        footerLabel.fontSize = 10
-        footerLabel.fontColor = ArcadeStyle.Color.textMuted
-        footerLabel.horizontalAlignmentMode = .center
-        footerLabel.verticalAlignmentMode = .center
-        footerLabel.zPosition = 10
-        contentNode.addChild(footerLabel)
 
         easyNode.button.onTap = { [weak self] in
             self?.openDaily(with: .easy)
@@ -3900,10 +3798,9 @@ final class DailyChallengeScene: SKScene {
         topBar.position = snap(CGPoint(x: 0, y: topBarY))
         topBar.layout(width: topBarWidth, height: topBarHeight)
 
-        subtitleLabel.position = snap(CGPoint(x: 0, y: topBarY - topBarHeight / 2 - 28))
-        dayLabel.position = snap(CGPoint(x: 0, y: subtitleLabel.position.y - 40))
-        bestLabel.position = snap(CGPoint(x: 0, y: dayLabel.position.y - 24))
-        footerLabel.position = snap(CGPoint(x: 0, y: safeBottom + 18))
+        subtitleLabel.position = snap(CGPoint(x: 0, y: topBarY - topBarHeight / 2 - 24))
+        dayLabel.position = snap(CGPoint(x: 0, y: subtitleLabel.position.y - 34))
+        bestLabel.position = snap(CGPoint(x: 0, y: dayLabel.position.y - 22))
 
         let cardWidth = min(safeWidth - 40, 336)
         let cardHeight: CGFloat = 92
@@ -3911,7 +3808,7 @@ final class DailyChallengeScene: SKScene {
         easyNode.applySize(CGSize(width: cardWidth, height: cardHeight))
         hardNode.applySize(CGSize(width: cardWidth, height: cardHeight))
 
-        let centerY = (bestLabel.position.y - 24 + footerLabel.position.y + 44) / 2
+        let centerY = (bestLabel.position.y - 24 + (safeBottom + 18) + 44) / 2
         easyNode.position = snap(CGPoint(x: 0, y: centerY + (cardHeight + spacing) / 2))
         hardNode.position = snap(CGPoint(x: 0, y: centerY - (cardHeight + spacing) / 2))
         menuBackdropNode?.update(size: size, titleAnchorY: dayLabel.position.y + 10)
@@ -4155,7 +4052,7 @@ final class ShopScene: SKScene {
         let tabSpacing: CGFloat = 10
         let tabRows: [[ShopTab]] = [
             [.playerColors, .playerPatterns, .trails],
-            [.winAnimations, .teleporters]
+            [.winAnimations]
         ]
         let firstRowY = coinCard.position.y - 42
         for (rowIndex, rowTabs) in tabRows.enumerated() {
@@ -4261,8 +4158,6 @@ final class ShopScene: SKScene {
             return "Trails react during movement and punch harder on combo events."
         case .winAnimations:
             return "Win FX upgrade the finish moment without slowing the run."
-        case .teleporters:
-            return "Portal skins keep readability while making teleports feel richer."
         }
     }
 

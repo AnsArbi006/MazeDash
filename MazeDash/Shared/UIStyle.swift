@@ -63,6 +63,7 @@ enum ArcadeStyle {
         static let accentCyan = SKColor(red: 0.25, green: 0.96, blue: 1.0, alpha: 1.0)
         static let accentMagenta = SKColor(red: 1.0, green: 0.42, blue: 0.9, alpha: 1.0)
         static let accentYellow = SKColor(red: 1.0, green: 0.92, blue: 0.4, alpha: 1.0)
+        static let accentGreen = SKColor(red: 0.45, green: 1.0, blue: 0.58, alpha: 1.0)
         static let panelTop = SKColor(red: 0.17, green: 0.21, blue: 0.34, alpha: 0.98)
         static let panelBottom = SKColor(red: 0.05, green: 0.07, blue: 0.16, alpha: 0.96)
         static let panelBorder = SKColor(red: 0.55, green: 0.94, blue: 1.0, alpha: 0.88)
@@ -126,8 +127,8 @@ struct LevelSelectStyle {
         static let cardOverlay = SKColor(white: 0.0, alpha: 0.45)
         static let cardOutline = SKColor(red: 0.5, green: 0.95, blue: 1.0, alpha: 0.88)
         static let cardGlow = SKColor(red: 0.3, green: 0.92, blue: 1.0, alpha: 0.35)
-        static let topBarFill = SKColor(red: 0.07, green: 0.1, blue: 0.18, alpha: 0.96)
-        static let topBarOutline = SKColor(red: 0.45, green: 0.93, blue: 1.0, alpha: 0.84)
+        static let topBarFill = ArcadeStyle.Color.panelTop
+        static let topBarOutline = ArcadeStyle.Color.panelBorder.withAlphaComponent(0.8)
         static let lockedOverlay = SKColor(white: 0.0, alpha: 0.35)
         static let debugBounds = SKColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 0.35)
     }
@@ -155,6 +156,8 @@ struct LevelSelectStyle {
         static let sidePadding: CGFloat = 20
         static let columnSpacing: CGFloat = 16
         static let rowSpacing: CGFloat = 16
+        static let chapterColumnSpacing: CGFloat = 14
+        static let chapterRowSpacing: CGFloat = 14
         static let topBarHeightMin: CGFloat = 54
         static let topBarHeightMax: CGFloat = 72
         static let topBarPadding: CGFloat = 10
@@ -162,6 +165,9 @@ struct LevelSelectStyle {
         static let backButtonWidth: CGFloat = 92
         static let backButtonHeight: CGFloat = 44
         static let cardCornerRadius: CGFloat = 18
+        static let chapterCardMaxWidth: CGFloat = 164
+        static let chapterCardHeightFactor: CGFloat = 0.76
+        static let cardMaxWidth: CGFloat = 156
         static let cardHeightFactor: CGFloat = 0.68
         static let cardInnerPadding: CGFloat = 10
         static let cardStarSizeMin: CGFloat = 20

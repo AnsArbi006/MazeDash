@@ -35,6 +35,89 @@ struct SoundFX {
         play(.select1, on: node)
     }
 
+    static func playPrimaryConfirm(on node: SKNode) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        EffectController.shared.playSemantic("uiPrimaryConfirm", sfx: .select1, excerptDuration: 0.09, minimumGap: 0.05)
+        EffectController.shared.playSemantic("uiPrimaryConfirmAccent", sfx: .select2, excerptDuration: 0.06, minimumGap: 0.07)
+        #else
+        if let action = action(for: .select1) {
+            node.run(action)
+        }
+        #endif
+    }
+
+    static func playScreenAdvance(on node: SKNode) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        EffectController.shared.playSemantic("uiScreenAdvance", sfx: .popupOpen, excerptDuration: 0.11, minimumGap: 0.09)
+        EffectController.shared.playSemantic("uiScreenAdvanceAccent", sfx: .cursor1, excerptDuration: 0.07, minimumGap: 0.09)
+        #else
+        if let action = action(for: .popupOpen) {
+            node.run(action)
+        }
+        #endif
+    }
+
+    static func playScreenBack(on node: SKNode) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        EffectController.shared.playSemantic("uiScreenBack", sfx: .popupClose, excerptDuration: 0.1, minimumGap: 0.08)
+        EffectController.shared.playSemantic("uiScreenBackAccent", sfx: .cancel1, excerptDuration: 0.08, minimumGap: 0.08)
+        #else
+        if let action = action(for: .popupClose) {
+            node.run(action)
+        }
+        #endif
+    }
+
+    static func playModalOpen(on node: SKNode) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        EffectController.shared.playSemantic("uiModalOpen", sfx: .popupOpen, excerptDuration: 0.1, minimumGap: 0.08)
+        #else
+        if let action = action(for: .popupOpen) {
+            node.run(action)
+        }
+        #endif
+    }
+
+    static func playModalClose(on node: SKNode) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        EffectController.shared.playSemantic("uiModalClose", sfx: .popupClose, excerptDuration: 0.08, minimumGap: 0.08)
+        #else
+        if let action = action(for: .popupClose) {
+            node.run(action)
+        }
+        #endif
+    }
+
+    static func playFocusChange(on node: SKNode) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        EffectController.shared.playSemantic("uiFocusChange", sfx: .cursor1, excerptDuration: 0.055, minimumGap: 0.04)
+        #else
+        if let action = action(for: .cursor1) {
+            node.run(action)
+        }
+        #endif
+    }
+
+    static func playStateChange(on node: SKNode, enabled: Bool) {
+        guard SettingsStore.shared.isEffectsPlaybackEnabled else { return }
+        #if os(iOS) || os(tvOS)
+        let key = enabled ? "uiStateOn" : "uiStateOff"
+        let sfx: SFX = enabled ? .select2 : .cancel1
+        let duration: TimeInterval = enabled ? 0.08 : 0.07
+        EffectController.shared.playSemantic(key, sfx: sfx, excerptDuration: duration, minimumGap: 0.05)
+        #else
+        if let action = action(for: enabled ? .select2 : .cancel1) {
+            node.run(action)
+        }
+        #endif
+    }
+
     static func playSwipe(on node: SKNode) {
         play(.swipe1, on: node)
     }

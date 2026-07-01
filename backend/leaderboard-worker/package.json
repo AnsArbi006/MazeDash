@@ -1,0 +1,16 @@
+{
+  "name": "mazedash-leaderboard-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev",
+    "db:apply": "npx wrangler d1 execute mazedash_leaderboard --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260405.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.11.1"
+  }
+}

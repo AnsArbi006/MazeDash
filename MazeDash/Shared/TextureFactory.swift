@@ -28,6 +28,9 @@ enum CardStyle: String {
     case badge
     case button
     case overlay
+    case shellPanel
+    case shellFeature
+    case shellAccent
 }
 
 enum TileStyle: String {
@@ -76,32 +79,70 @@ final class TextureFactory {
 
     func cardTexture(size: CGSize, style: CardStyle) -> SKTexture {
         texture(key: "card_\(style.rawValue)", size: size) { context, rect in
-            let corner = rect.height * 0.26
+            let corner: CGFloat
             let topColor: SKColor
             let bottomColor: SKColor
             let borderColor: SKColor
             let highlightAlpha: CGFloat
+            let shadowAlpha: CGFloat
+            let innerStrokeAlpha: CGFloat
             switch style {
             case .hud:
-                topColor = blend(GlossyPalette.cardTop, with: GlossyPalette.accentCyan, ratio: 0.08)
-                bottomColor = GlossyPalette.cardBottom
-                borderColor = GlossyPalette.cardBorder
-                highlightAlpha = 0.13
+                corner = rect.height * 0.26
+                topColor = blend(GlossyPalette.cardTop, with: SKColor.white, ratio: 0.015)
+                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.16)
+                borderColor = blend(GlossyPalette.cardBorder, with: SKColor.white, ratio: 0.08)
+                highlightAlpha = 0.05
+                shadowAlpha = 0.1
+                innerStrokeAlpha = 0.045
             case .badge:
-                topColor = blend(GlossyPalette.cardTop, with: GlossyPalette.accentPink, ratio: 0.12)
-                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.18)
+                corner = rect.height * 0.26
+                topColor = blend(GlossyPalette.cardTop, with: GlossyPalette.accentPink, ratio: 0.08)
+                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.2)
                 borderColor = GlossyPalette.accentPink
-                highlightAlpha = 0.16
+                highlightAlpha = 0.085
+                shadowAlpha = 0.09
+                innerStrokeAlpha = 0.06
             case .button:
-                topColor = blend(GlossyPalette.cardTop, with: GlossyPalette.accentCyan, ratio: 0.18)
-                bottomColor = blend(GlossyPalette.cardBottom, with: GlossyPalette.accentPink, ratio: 0.08)
+                corner = rect.height * 0.26
+                topColor = blend(GlossyPalette.cardTop, with: GlossyPalette.accentCyan, ratio: 0.1)
+                bottomColor = blend(GlossyPalette.cardBottom, with: GlossyPalette.accentPink, ratio: 0.04)
                 borderColor = GlossyPalette.accentCyan
-                highlightAlpha = 0.18
+                highlightAlpha = 0.09
+                shadowAlpha = 0.09
+                innerStrokeAlpha = 0.065
             case .overlay:
-                topColor = blend(GlossyPalette.cardTop, with: SKColor.white, ratio: 0.04)
-                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.12)
-                borderColor = GlossyPalette.cardBorder
-                highlightAlpha = 0.12
+                corner = min(22, rect.height * 0.16)
+                topColor = blend(GlossyPalette.cardTop, with: SKColor.white, ratio: 0.014)
+                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.24)
+                borderColor = blend(GlossyPalette.cardBorder, with: SKColor.white, ratio: 0.08)
+                highlightAlpha = 0.032
+                shadowAlpha = 0.115
+                innerStrokeAlpha = 0.04
+            case .shellPanel:
+                corner = rect.height * 0.26
+                topColor = blend(GlossyPalette.cardTop, with: SKColor.white, ratio: 0.012)
+                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.22)
+                borderColor = blend(GlossyPalette.cardBorder, with: SKColor.white, ratio: 0.1)
+                highlightAlpha = 0.05
+                shadowAlpha = 0.1
+                innerStrokeAlpha = 0.05
+            case .shellFeature:
+                corner = rect.height * 0.26
+                topColor = blend(GlossyPalette.cardTop, with: GlossyPalette.accentCyan, ratio: 0.05)
+                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.18)
+                borderColor = blend(GlossyPalette.cardBorder, with: GlossyPalette.accentCyan, ratio: 0.16)
+                highlightAlpha = 0.062
+                shadowAlpha = 0.098
+                innerStrokeAlpha = 0.05
+            case .shellAccent:
+                corner = rect.height * 0.26
+                topColor = blend(GlossyPalette.cardTop, with: ArcadeStyle.Color.accentYellow, ratio: 0.05)
+                bottomColor = blend(GlossyPalette.cardBottom, with: SKColor.black, ratio: 0.18)
+                borderColor = blend(ArcadeStyle.Color.accentYellow, with: GlossyPalette.cardBorder, ratio: 0.18)
+                highlightAlpha = 0.068
+                shadowAlpha = 0.102
+                innerStrokeAlpha = 0.052
             }
             drawGlossyRoundedRect(
                 in: context,
@@ -110,7 +151,9 @@ final class TextureFactory {
                 topColor: topColor,
                 bottomColor: bottomColor,
                 borderColor: borderColor,
-                highlightAlpha: highlightAlpha
+                highlightAlpha: highlightAlpha,
+                shadowAlpha: shadowAlpha,
+                innerStrokeAlpha: innerStrokeAlpha
             )
         }
     }
@@ -212,21 +255,57 @@ final class TextureFactory {
                 }
                 context.strokePath()
             case .dualCore:
+                context.setStrokeColor(skin.highlightColor.withAlphaComponent(0.38).cgColor)
+                context.setLineWidth(max(1, rect.width * 0.024))
+                let nodes: [CGPoint] = [
+                    CGPoint(x: insetRect.minX + insetRect.width * 0.22, y: insetRect.minY + insetRect.height * 0.26),
+                    CGPoint(x: insetRect.midX, y: insetRect.minY + insetRect.height * 0.18),
+                    CGPoint(x: insetRect.maxX - insetRect.width * 0.2, y: insetRect.minY + insetRect.height * 0.34),
+                    CGPoint(x: insetRect.minX + insetRect.width * 0.28, y: insetRect.maxY - insetRect.height * 0.24),
+                    CGPoint(x: insetRect.maxX - insetRect.width * 0.24, y: insetRect.maxY - insetRect.height * 0.2)
+                ]
+                for point in nodes {
+                    for other in nodes where other != point {
+                        if abs(point.x - other.x) + abs(point.y - other.y) < insetRect.width * 0.82 {
+                            context.move(to: point)
+                            context.addLine(to: other)
+                        }
+                    }
+                }
+                context.strokePath()
+                context.setFillColor(skin.highlightColor.withAlphaComponent(0.55).cgColor)
+                for node in nodes {
+                    context.fillEllipse(in: CGRect(x: node.x - rect.width * 0.035, y: node.y - rect.width * 0.035, width: rect.width * 0.07, height: rect.width * 0.07))
+                }
+            case .quantumFracture:
                 if let gradient = CGGradient(
                     colorsSpace: CGColorSpaceCreateDeviceRGB(),
                     colors: [
-                        SKColor(hex: 0x00D4FF).withAlphaComponent(0.62).cgColor,
-                        SKColor(hex: 0xFF2D9A).withAlphaComponent(0.62).cgColor
+                        skin.highlightColor.withAlphaComponent(0.48).cgColor,
+                        skin.baseColor.withAlphaComponent(0.26).cgColor,
+                        skin.deepColor.withAlphaComponent(0.08).cgColor
                     ] as CFArray,
-                    locations: [0.0, 1.0]
+                    locations: [0.0, 0.55, 1.0]
                 ) {
                     context.drawLinearGradient(
                         gradient,
-                        start: CGPoint(x: insetRect.minX, y: insetRect.midY),
-                        end: CGPoint(x: insetRect.maxX, y: insetRect.midY),
+                        start: CGPoint(x: insetRect.minX, y: insetRect.minY),
+                        end: CGPoint(x: insetRect.maxX, y: insetRect.maxY),
                         options: []
                     )
                 }
+                context.setStrokeColor(skin.highlightColor.withAlphaComponent(0.42).cgColor)
+                context.setLineWidth(max(1, rect.width * 0.03))
+                let fractures = [
+                    (CGPoint(x: insetRect.minX + insetRect.width * 0.16, y: insetRect.minY + insetRect.height * 0.2), CGPoint(x: insetRect.midX, y: insetRect.maxY - insetRect.height * 0.14)),
+                    (CGPoint(x: insetRect.midX - insetRect.width * 0.06, y: insetRect.minY + insetRect.height * 0.16), CGPoint(x: insetRect.maxX - insetRect.width * 0.18, y: insetRect.midY)),
+                    (CGPoint(x: insetRect.minX + insetRect.width * 0.28, y: insetRect.maxY - insetRect.height * 0.18), CGPoint(x: insetRect.maxX - insetRect.width * 0.14, y: insetRect.maxY - insetRect.height * 0.3))
+                ]
+                for fracture in fractures {
+                    context.move(to: fracture.0)
+                    context.addLine(to: fracture.1)
+                }
+                context.strokePath()
             default:
                 break
             }
@@ -269,6 +348,14 @@ final class TextureFactory {
                 context.addLine(to: CGPoint(x: rect.midX + rect.width * 0.02, y: rect.maxY - rect.height * 0.22))
                 context.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.16, y: rect.midY + rect.height * 0.04))
                 context.strokePath()
+            case .phaseStream, .energyBurst:
+                let ellipse = rect.insetBy(dx: rect.width * 0.18, dy: rect.height * 0.18)
+                context.setFillColor(fillColor.withAlphaComponent(0.7).cgColor)
+                context.fillEllipse(in: ellipse)
+                context.setFillColor(fillColor.withAlphaComponent(0.32).cgColor)
+                context.fillEllipse(in: ellipse.offsetBy(dx: -rect.width * 0.18, dy: 0))
+                context.setFillColor(SKColor.white.withAlphaComponent(0.18).cgColor)
+                context.fillEllipse(in: ellipse.insetBy(dx: rect.width * 0.18, dy: rect.height * 0.18))
             default:
                 let ellipse = rect.insetBy(dx: rect.width * 0.16, dy: rect.height * 0.16)
                 context.setFillColor(fillColor.cgColor)
@@ -520,7 +607,9 @@ private func drawGlossyRoundedRect(
     topColor: SKColor,
     bottomColor: SKColor,
     borderColor: SKColor,
-    highlightAlpha: CGFloat = 0.12
+    highlightAlpha: CGFloat = 0.12,
+    shadowAlpha: CGFloat = 0.09,
+    innerStrokeAlpha: CGFloat = 0.05
 ) {
     let path = CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
     context.saveGState()
@@ -535,20 +624,45 @@ private func drawGlossyRoundedRect(
 
     context.drawLinearGradient(gradient, start: CGPoint(x: rect.midX, y: rect.minY), end: CGPoint(x: rect.midX, y: rect.maxY), options: [])
 
-    let highlightRect = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.32)
+    let highlightInsetX = max(3, rect.width * 0.08)
+    let highlightInsetY = max(2, rect.height * 0.065)
+    let highlightRect = CGRect(
+        x: rect.minX + highlightInsetX,
+        y: rect.minY + highlightInsetY,
+        width: rect.width - highlightInsetX * 2,
+        height: rect.height * 0.115
+    )
+    let highlightPath = CGPath(
+        roundedRect: highlightRect,
+        cornerWidth: max(2, cornerRadius * 0.65),
+        cornerHeight: max(2, cornerRadius * 0.65),
+        transform: nil
+    )
+    context.addPath(highlightPath)
     context.setFillColor(SKColor(white: 1.0, alpha: highlightAlpha).cgColor)
-    context.fill(highlightRect)
+    context.fillPath()
+
+    let lowerShadowRect = CGRect(
+        x: rect.minX,
+        y: rect.maxY - rect.height * 0.21,
+        width: rect.width,
+        height: rect.height * 0.21
+    )
+    context.setFillColor(SKColor(white: 0.0, alpha: shadowAlpha).cgColor)
+    context.fill(lowerShadowRect)
 
     let innerGlowRect = rect.insetBy(dx: rect.width * 0.02, dy: rect.height * 0.02)
     let innerGlowPath = CGPath(roundedRect: innerGlowRect, cornerWidth: max(1, cornerRadius - 2), cornerHeight: max(1, cornerRadius - 2), transform: nil)
     context.addPath(innerGlowPath)
-    context.setStrokeColor(SKColor(white: 1.0, alpha: highlightAlpha * 0.45).cgColor)
-    context.setLineWidth(1)
+    context.setStrokeColor(SKColor(white: 1.0, alpha: innerStrokeAlpha).cgColor)
+    context.setLineWidth(0.8)
     context.strokePath()
 
     context.restoreGState()
 
-    context.addPath(path)
+    let strokeRect = rect.insetBy(dx: 0.5, dy: 0.5)
+    let strokePath = CGPath(roundedRect: strokeRect, cornerWidth: max(1, cornerRadius - 0.5), cornerHeight: max(1, cornerRadius - 0.5), transform: nil)
+    context.addPath(strokePath)
     context.setStrokeColor(borderColor.cgColor)
     context.setLineWidth(1)
     context.strokePath()
@@ -556,8 +670,8 @@ private func drawGlossyRoundedRect(
     let innerRect = rect.insetBy(dx: 1, dy: 1)
     let innerPath = CGPath(roundedRect: innerRect, cornerWidth: max(1, cornerRadius - 1), cornerHeight: max(1, cornerRadius - 1), transform: nil)
     context.addPath(innerPath)
-    context.setStrokeColor(SKColor(white: 0.0, alpha: 0.16).cgColor)
-    context.setLineWidth(1)
+    context.setStrokeColor(SKColor(white: 0.0, alpha: 0.12).cgColor)
+    context.setLineWidth(0.8)
     context.strokePath()
 }
 

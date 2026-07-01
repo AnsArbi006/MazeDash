@@ -1,4 +1,5 @@
 MazeDash does not require a user account or sign-in.
+MazeDash includes an optional online Time Challenge leaderboard. Players may choose a display name for leaderboard ranking, but no account is required.
 
 Core control:
 - Swipe in any direction to move through the maze.
@@ -8,6 +9,7 @@ Important review notes:
 - Daily Challenge may show a daily prompt on launch.
 - The in-game Shop uses gameplay-earned coins only.
 - There are no in-app purchases, no real-money purchases, no ads, and no login system.
+- The optional leaderboard sends only display name, duration bucket, and best maze count to the developer-operated backend.
 
 Modes:
 - Story Mode: structured level progression

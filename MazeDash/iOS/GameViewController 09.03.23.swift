@@ -18,6 +18,8 @@ class GameViewController: UIViewController {
         case startMenu
         case dailyMenu
         case levelSelect
+        case challengeMenu
+        case shopMenu
         case gameplay(levelId: Int)
     }
 
@@ -75,6 +77,11 @@ class GameViewController: UIViewController {
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        AdService.shared.requestConsentAndConfigureIfNeeded()
+    }
+
     private func presentInitialScene() {
         guard !didPresentInitialScene else { return }
         guard let skView = self.view as? SKView else { return }
@@ -89,6 +96,10 @@ class GameViewController: UIViewController {
             scene = DailyChallengeScene(size: view.bounds.size)
         case .levelSelect:
             scene = LevelSelectScene(size: view.bounds.size)
+        case .challengeMenu:
+            scene = ChallengeSelectScene(size: view.bounds.size)
+        case .shopMenu:
+            scene = ShopScene(size: view.bounds.size)
         case let .gameplay(levelId):
             let levelIndex = max(0, min(LevelStore.levels.count - 1, levelId - 1))
             scene = GameScene(size: view.bounds.size, levelIndex: levelIndex, runMode: .normal)
@@ -112,6 +123,10 @@ class GameViewController: UIViewController {
             return .dailyMenu
         case "levels":
             return .levelSelect
+        case "challenge":
+            return .challengeMenu
+        case "shop":
+            return .shopMenu
         default:
             if raw.hasPrefix("gameplay:"),
                let levelId = Int(raw.replacingOccurrences(of: "gameplay:", with: "")) {
